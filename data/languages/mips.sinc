@@ -142,6 +142,7 @@
 @define REGSIZE "8"     # General purpose register size (8 or 4)
 @define FREGSIZE "8"    # Floating point register size (8 or 4)
 @define ADDRSIZE "4"    # Memory address size (8 or 4, virtual and physical)
+@define DREGSIZE "16"     # 2x REGSIZE used for accumulators
 @define SIZETO4  "4"   # In 32-bit mode, no truncation needed
 @define ADDRCAST ":4"   # need to down cast to pointer size
 @define NEEDCAST "1"
@@ -151,6 +152,7 @@
 @define REGSIZE "8"     # General purpose register size (8 or 4)
 @define FREGSIZE "8"    # Floating point register size (8 or 4)
 @define ADDRSIZE "8"    # Memory address size (8 or 4, virtual and physical)
+@define DREGSIZE "16"     # 2x REGSIZE used for accumulators
 @define SIZETO4 "4"    # In 64-bit mode, use when need to do 32-bit operation
 @define ADDRCAST ""     # no need to down cast to pointer size
 
@@ -162,6 +164,8 @@
 @define REGSIZE "4"     # General purpose register size (8 or 4)
 # FREGSIZE for mips32 is set in slaspec file
 @define ADDRSIZE "4"    # Memory address size (8 or 4, virtual and physical)
+@define DOUBLE "8"     # 2x REGSIZE used for accumulators
+@define DREGSIZE "8"
 @define SIZETO4 "4"
 @define ADDRCAST ""     # no need to down cast to pointer size
 
@@ -188,11 +192,13 @@ define register offset=0 size=$(REGSIZE) [
     pc
 ];
 
+### PSX ###
 # gte macroses calls special registers
 define register offset=0x10000 size=4 [
 	gte0 gte1 gte2 gte3 gte4 gte5 gte6 gte7 gte8
 	gte9 gte10 gte11 gte12 gte13 gte14 gte15
 ];
+### PSX ###
 
 @ifdef MIPS64
 # We need the 32-bit pieces of the main registers for the 32-bit instructions
@@ -326,7 +332,7 @@ define register offset=0x2400 size=$(REGSIZE) [
 
 # COP-0 control registers, sel=5
 define register offset=0x2500 size=$(REGSIZE) [
-    cop0_reg0.5 VPESchedule TCContext   cop0_reg3.5
+    cop0_reg0.5     VPESchedule     TCContext       cop0_reg3.5
     cop0_reg4.5     cop0_reg5.5     SRSConf4        cop0_reg7.5
     cop0_reg8.5     cop0_reg9.5     cop0_reg10.5    cop0_reg11.5
     cop0_reg12.5    cop0_reg13.5    cop0_reg14.5    cop0_reg15.5
@@ -361,9 +367,52 @@ define register offset=0x2700 size=$(REGSIZE) [
 ];
 
 # Some other internal registers
-define register offset=0x3000 size=$(REGSIZE) [ hi lo hi1 lo1 hi2 lo2 hi3 lo3 tsp ];
+define register offset=0x3000 size=$(REGSIZE) [
+@if ENDIAN == "big"
+    hi lo hi1 lo1 hi2 lo2 hi3 lo3
+@else
+    lo hi lo1 hi1 lo2 hi2 lo3 hi3
+@endif # ENDIAN
+    tsp
+];
 
+# MIPS dsp lo/hi combined registers
+define register offset=0x3000 size=$(DREGSIZE) [ ac0 ac1 ac2 ac3 ];
+
+define register offset=0x3100 size=$(REGSIZE) [ DSPControl ];
+
+define register offset=0x3200 size=$(REGSIZE) [
+	HW_CPUNUM	HW_SYNCI_STEP	HW_CC		HW_CCRe
+	HW_PerfCtr	HW_XNP			HW_RES6		HW_RES7
+	HW_RES8		HW_RES9			HW_RES10	HW_RES11
+	HW_RES12	HW_RES13		HW_RES14	HW_RES15
+	HW_RES16	HW_RES17		HW_RES18	HW_RES19
+	HW_RES20	HW_RES21		HW_RES22	HW_RES23
+	HW_RES24	HW_RES25		HW_RES26	HW_RES27
+	HW_RES28	HW_ULR			HW_RESIM30	HW_RESIM31
+];
+
+@ifdef ISA_VARIANT 
 define register offset=0x3F00 size=1 [ ISAModeSwitch ];
+@endif
+
+# Dummy registers for multi-threading
+define register offset=0x3300 size=$(REGSIZE) [
+	thread_zero	thread_at	thread_v0	thread_v1	thread_a0	thread_a1	thread_a2	thread_a3
+	thread_t0	thread_t1	thread_t2	thread_t3	thread_t4	thread_t5	thread_t6	thread_t7
+	thread_s0	thread_s1	thread_s2	thread_s3	thread_s4	thread_s5	thread_s6	thread_s7
+	thread_t8	thread_t9	thread_k0	thread_k1	thread_gp	thread_sp	thread_s8	thread_ra
+	
+	thread_f0	thread_f1	thread_f2	thread_f3	thread_f4	thread_f5	thread_f6	thread_f7
+	thread_f8	thread_f9	thread_f10	thread_f11	thread_f12	thread_f13	thread_f14	thread_f15
+	thread_f16	thread_f17	thread_f18	thread_f19	thread_f20	thread_f21	thread_f22	thread_f23
+	thread_f24	thread_f25	thread_f26	thread_f27	thread_f28	thread_f29	thread_f30	thread_f31
+	
+	thread_lo0	thread_hi0	thread_acx0	_	thread_lo1	thread_hi1	thread_acx1	_
+	thread_lo2	thread_hi2	thread_acx2	_	thread_lo3	thread_hi3	thread_acx3	_
+	
+	thread_fir	thread_fccr	thread_fexr	thread_fenr	thread_fcsr
+];
 
 # Define context bits
 define register offset=0x4000 size=4   contextreg;
@@ -441,20 +490,25 @@ define context contextreg
 ;
 
 
+
 # Instruction fields
 
 define token instr(32)
     prime       = (26,31)
     bit25       = (25,25)
+    zero2425    = (24,25)
     zero2325    = (23,25)
     zero1       = (22,25)
     rs32        = (21,25)
     frD         = (21,25)
     rs          = (21,25)
+### PSX ###
     rs1         = (21,25)
     rs2         = (21,25)
+### PSX ###
     fr          = (21,25)
     base        = (21,25)
+### PSX ###
     base1       = (21,25)
     base2       = (21,25)
     base3       = (21,25)
@@ -471,18 +525,26 @@ define token instr(32)
     base14      = (21,25)
     base15      = (21,25)
     base16      = (21,25)
+### PSX ###
     format      = (21,25)
     copop       = (21,25)
     mfmc0       = (21,25)
-    zero21	= (21,25)
-    jsub	= (21,25)
+    zero21      = (21,25)
+    jsub        = (21,25)
+    sa_dsp2     = (21,25)
+    shift21     = (21,25)
+    sz          = (21,25)
+    
+    acf         = (21,22)
     acflo       = (21,22)
     acfhi       = (21,22)
+    shift20     = (20,25)
     breakcode   = (6,25)
     off26       = (0,25) signed			# 26 bit signed offset, e.g. balc, bc
     ind26       = (0,25)				# 26 bit unsigned index, e.g. jal
     copfill     = (6,24)
     cofun       = (0,24)
+### PSX ###
     cop2_mvmva1 = (0,9)
     cop2_mvmva2 = (20,24)
     cop2_sf     = (19,19)
@@ -490,38 +552,55 @@ define token instr(32)
     cop2_v      = (15,16)
     cop2_cv     = (13,14)
     cop2_lm     = (10,10)
-    off21	= (0,20) signed		# 21 bit signed offset in conditional branch/link
-    off16	= (0,15) signed		# 16 bit signed offset in conditional branch/link
+### PSX ###
+    off21       = (0,20) signed		# 21 bit signed offset in conditional branch/link
+    off16       = (0,15) signed		# 16 bit signed offset in conditional branch/link
     bit21       = (21,21)
-    bitz19	= (19,20)
-    pcrel	= (19,20)
-    pcrel2	= (18,20)
+    bitz19      = (19,20)
+    pcrel       = (19,20)
+    pcrel2      = (18,20)
     cc          = (18,20)
+    immed1625   = (16,25) signed
+    immed1623   = (16,23) signed
     rt32        = (16,20)
     rt          = (16,20)
+### PSX ###
     rt1         = (16,20)
     rt2         = (16,20)
     rt3         = (16,20)
     rt4         = (16,20)
+### PSX ###
+    rtmtdsp     = (16,20)
+    RT0thread   = (16,20)
+    RTthread    = (16,20)
+    FTthread    = (16,20)
+    FCTthread   = (16,20)
     ftD         = (16,20)
     ft          = (16,20)
     index       = (16,20)
     hint        = (16,20)
     cop1code    = (16,20)
-    synci       = (16,20)  
+    synci       = (16,20)
     cond        = (16,20)
     op          = (16,20)
     zero1620    = (16,20)
+    
+    zero1619    = (16,19)
+    lohiacx     = (16,19)
     nd          = (17,17)
     tf          = (16,16)
     zero1320    = (13,20)
     zero1315    = (13,15)
     szero       = (11,25)
-    baser6	= (11,15)
+    mask        = (11,20)
+    baser6      = (11,15)
     rd32        = (11,15)
     rd          = (11,15)
+### PSX ###
     rd1         = (11,15)
     rd2         = (11,15)
+### PSX ###
+    rdmtdsp     = (11,15)
     rd0_0       = (11,15)
     rd0_1       = (11,15)
     rd0_2       = (11,15)
@@ -530,6 +609,7 @@ define token instr(32)
     rd0_5       = (11,15)
     rd0_6       = (11,15)
     rd0_7       = (11,15)
+    rd_hw       = (11,15)
     cp2cprSel0	= (11,15)
     cp2cprSel1	= (11,15)
     cp2cprSel2	= (11,15)
@@ -540,31 +620,44 @@ define token instr(32)
     cp2cprSel7	= (11,15)
     fsD         = (11,15)
     fs          = (11,15)
-    fs_unk	= (11,15)
-    fs_fcr	= (11,15)
+    RD0thread   = (11,15)
+    RDthread    = (11,15)
+    FDthread    = (11,15)
+    FCRthread   = (16,20)
+    sa_dsp      = (11,15)
+    fs_unk      = (11,15)
+    fs_fcr      = (11,15)
     zero4       = (11,15)
     msbd        = (11,15)
+    
+    lohiacx2    = (11,14)
     aclo        = (11,12)
     achi        = (11,12)
-    code        = (6,15)
+    ac          = (11,12)
+    bp          = (11,12)
     bit10       = (10,10)
-    spec2	= (9,10)
-    spec3	= (8,10)
-    simmed9	= (7,15)
+    spec2       = (9,10)
+    spec3       = (8,10)
+    simmed9     = (7,15)
     zero2       = (7,10)
+    code        = (6,15)
     fdD         = (6,10)
     fd          = (6,10)
     stype       = (6,10)
     sa          = (6,10)
+### PSX ###
     sa_1        = (6,10)
     sa_2        = (6,10)
+### PSX ###
     lsb         = (6,10)
     fct2        = (6,10)
     zero5       = (6,10)
     wsbh        = (6,10)
-    bp3			= (6,8)
-    sa2			= (6,7)
-    bp2			= (6,7)
+    
+    bp3         = (6,8)
+    sel_0608    = (6,8)
+    sa2         = (6,7)
+    bp2         = (6,7)
     zero6       = (3,10)
     bigfunct    = (0,10)
     fct         = (0,5)
@@ -572,25 +665,35 @@ define token instr(32)
     bit6        = (6,6)
     zero3       = (0,4)
     bit5        = (5,5)
+    h           = (4,4)
     op4         = (3,5)
+    bit3        = (3,3)
     sel         = (0,2)
     format1X    = (0,2)
-    simmed19	= (0,18) signed
-    simmed18	= (0,17) signed
+    simmed19    = (0,18) signed
+    simmed18    = (0,17) signed
     immed       = (0,15)
     simmed      = (0,15) signed
-    simmed1     = (0,15) signed
-    simmed2     = (0,15) signed
-    simmed3     = (0,15) signed
-    simmseq	= (6,15) signed
-    simmed11	= (0,10)
+    simmseq     = (6,15) signed
+    simmed11    = (0,10)
 ;
 
 attach variables [ rs rt rt1 rt2 rt3 rt4 rd base base1 base2 base3 base4 base5 base6 base7 base8 base9 base10 base11 base12 base13 base14 base15 base16 index baser6 ] [ 
     zero  at  v0  v1  a0  a1  a2  a3
     t0    t1  t2  t3  t4  t5  t6  t7
     s0    s1  s2  s3  s4  s5  s6  s7
-    t8    t9  k0  k1  gp  sp  s8  ra 
+    t8    t9  k0  k1  gp  sp  s8  ra
+];
+
+attach variables [ rd_hw ] [
+	HW_CPUNUM	HW_SYNCI_STEP	HW_CC		HW_CCRe
+	HW_PerfCtr	HW_XNP			HW_RES6		HW_RES7
+	HW_RES8		HW_RES9			HW_RES10	HW_RES11
+	HW_RES12	HW_RES13		HW_RES14	HW_RES15
+	HW_RES26	HW_RES17		HW_RES18	HW_RES19
+	HW_RES20	HW_RES21		HW_RES22	HW_RES23
+	HW_RES24	HW_RES25		HW_RES26	HW_RES27
+	HW_RES28	HW_ULR			HW_RESIM30	HW_RESIM31
 ];
 
 @ifdef MIPS64
@@ -728,6 +831,7 @@ attach variables [ rd0_7 ] [
 
 attach variables [ aclo acflo ] [ lo lo1 lo2 lo3 ];
 attach variables [ achi acfhi ] [ hi hi1 hi2 hi3 ];
+attach variables [ ac acf ] [ ac0 ac1 ac2 ac3 ];
 
 attach names hint [ 
     "load" "store" "hint2" "hint3" "load_streamed" "store_streamed" "load_retained" "store_retained"
@@ -735,6 +839,32 @@ attach names hint [
     "hint16" "hint17" "hint18" "hint19" "hint20" "hint21" "hint22" "hint23" "hint24"
     "writeback_invalidate" "hint26" "hint27" "hint28" "hint29" "PrepareForStore" "hint31" ];
 
+attach variables [RTthread RDthread] [
+	thread_zero	thread_at	thread_v0	thread_v1	thread_a0	thread_a1	thread_a2	thread_a3
+	thread_t0	thread_t1	thread_t2	thread_t3	thread_t4	thread_t5	thread_t6	thread_t7
+	thread_s0	thread_s1	thread_s2	thread_s3	thread_s4	thread_s5	thread_s6	thread_s7
+	thread_t8	thread_t9	thread_k0	thread_k1	thread_gp	thread_sp	thread_s8	thread_ra
+];
+
+attach variables [ FTthread FDthread ] [
+	thread_f0	thread_f1	thread_f2	thread_f3	thread_f4	thread_f5	thread_f6	thread_f7
+	thread_f8	thread_f9	thread_f10	thread_f11	thread_f12	thread_f13	thread_f14	thread_f15
+	thread_f16	thread_f17	thread_f18	thread_f19	thread_f20	thread_f21	thread_f22	thread_f23
+	thread_f24	thread_f25	thread_f26	thread_f27	thread_f28	thread_f29	thread_f30	thread_f31
+];
+
+attach variables [ rtmtdsp rdmtdsp ] [
+	thread_lo0	thread_hi0	thread_acx0	_	thread_lo1	thread_hi1	thread_acx1	_
+	thread_lo2	thread_hi2	thread_acx2	_	thread_lo3	thread_hi3	thread_acx3	_
+	_	_	_	_	_	_	_	_	_	_	_	_	_	_	_	_
+];
+
+attach variables [ FCTthread FCRthread ] [
+	thread_fir	_			_			_	_			_	_	_
+	_			_			_			_	_			_	_	_
+	_			_			_			_	_			_	_	_
+	_			thread_fccr	thread_fexr	_	thread_fenr	_	_	thread_fcsr
+];
 
 # Subconstructors
 RD0: rd0_0  is rd0_0 & sel=0  { export rd0_0; }
@@ -758,6 +888,7 @@ RT: rt          is rt           { export rt; }
 RTsrc: rt       is rt           { export rt; }
 RTsrc: rt       is rt & rt=0    { export 0:$(REGSIZE); }
 
+### PSX ###
 RT1: rt1          is rt1           { export rt1; }
 RTsrc1: rt1       is rt1           { export rt1; }
 RTsrc1: rt1       is rt1 & rt1=0    { export 0:$(REGSIZE); }
@@ -773,6 +904,7 @@ RTsrc3: rt3       is rt3 & rt3=0    { export 0:$(REGSIZE); }
 RT4: rt4          is rt4           { export rt4; }
 RTsrc4: rt4       is rt4           { export rt4; }
 RTsrc4: rt4       is rt4 & rt4=0    { export 0:$(REGSIZE); }
+### PSX ###
 
 RD32: rd      is rd & rd32         { export rd32; }
 RS32src: rs   is rs & rs32         { export rs32; }
@@ -831,10 +963,14 @@ DinsXSize: mysize         is msbd & lsb   [ mysize = msbd - lsb + 1 + 32; ] { tm
 @endif
 
 macro JXWritePC(addr) {
+@ifdef ISA_VARIANT 
    ISAModeSwitch = (addr & 0x1) != 0;
    tmp:$(REGSIZE) = -2;
    tmp = tmp & addr;
    pc = tmp;
+@else
+   pc=addr;
+@endif
 }
 
 # Floating point formats
@@ -843,6 +979,29 @@ macro JXWritePC(addr) {
 #fmt: "W"        is format=0x14   { }
 #fmt: "L"        is format=0x15   { }
 #fmt: "PS"       is format=0x16   { }
+
+fmt1: "S"       is format=0x10   { }
+fmt1: "D"       is format=0x11   { }
+fmt1: "PS"      is format=0x16   { }
+
+fmt2: "S"       is format=0x10   { }
+fmt2: "D"       is format=0x11   { }
+
+fmt3: "S"       is format=0x10   { }
+fmt3: "W"       is format=0x14   { }
+fmt3: "L"       is format=0x15   { }
+
+fmt4: "D"       is format=0x11   { }
+fmt4: "W"       is format=0x14   { }
+fmt4: "L"       is format=0x15   { }
+
+fmt5: "S"       is format1X=0x0   { }
+fmt5: "D"       is format1X=0x1   { }
+fmt5: "PS"      is format1X=0x6   { }
+
+# Release 6 and later:
+fmt6: "S"	is format=0x14    { }
+fmt6: "D"	is format=0x15    { }
 
 # Custom Pcode Operations
 #
@@ -913,20 +1072,14 @@ define pcodeop getCopRegH;
 define pcodeop setCopReg;
 define pcodeop setCopRegH;
 
-# countLeadingOnes(val)
-define pcodeop countLeadingOnes;
-
-# countLeadingZeros(val)
-define pcodeop countLeadingZeros;
-
 # extractField(value, msbd, lsb)
 define pcodeop extractField;
 
-# getHWRegister(regnum)
-define pcodeop getHWRegister;
-
 # setShadow(sgpr, value)
 define pcodeop setShadow;
+
+# getHWRegister(reg, sel)
+define pcodeop getHWRegister;
 
 # gpr = getShadow(sgpr)
 define pcodeop getShadow;
