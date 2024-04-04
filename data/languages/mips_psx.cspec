@@ -16,13 +16,7 @@
 
   <stackpointer register="sp" space="ram"/>
   <funcptr align="2"/>
-<!--  PSX
-  <spacebase name="gp" register="gp" space="ram"/>
--->
   <global>
-<!-- PSX
-    <range space="gp"/>
--->
     <range space="ram"/>
     <range space="register" first="0x2000" last="0x2fff"/>
   </global>
@@ -109,7 +103,7 @@
     </unaffected>
   </prototype>
  
-<!-- PSX
+<!-- PSX -->
   <prototype name="__gtemacro" extrapop="0" stackshift="0">
   	<input>
   		<pentry minsize="2" maxsize="4">
@@ -164,6 +158,6 @@
   	<output>
   	</output>
   </prototype>
--->
+<!-- PSX -->
 
 </compiler_spec>

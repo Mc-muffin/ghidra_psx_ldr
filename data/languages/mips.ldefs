@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <language_definitions>
-  <language processor="PSX"
+  <language processor="MIPS"
             endian="little"
             size="32"
-            variant="default"
-            version="1.5"
-            slafile="mips32le.sla"
-            processorspec="mips32.pspec"
-            id="PSX:LE:32:default">
-    <description>PSX 32-bit addresses, little endian</description>
-    <compiler name="default" spec="mips32le.cspec" id="default"/>
+            variant="PSX"
+            version="1.6"
+            slafile="mips_psx.sla"
+            processorspec="mips_psx.pspec"
+            id="MIPS:LE:32:PSX">
+    <description>PSX MIPS R3052 with GTE coprocessor, no FPU, 32-bit addresses, little endian</description>
+    <compiler name="default" spec="mips_psx.cspec" id="default"/>
     <external_name tool="gnu" name="mips:3000"/>
     <external_name tool="IDA-PRO" name="mipsl"/>
     <external_name tool="DWARF.register.mapping.file" name="mips.dwarf"/>

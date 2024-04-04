@@ -113,7 +113,7 @@ public class PsyqLoader extends AbstractLibrarySupportLoader {
 			int version = reader.readByte(3);
 			
 			if (version == 2) {
-				loadSpecs.add(new LoadSpec(this, 0, new LanguageCompilerSpecPair(PsxLoader.PSX_LANG_ID, "default"), true));
+				loadSpecs.add(new LoadSpec(this, 0, new LanguageCompilerSpecPair(PsxLoader.PSX_LANG_ID, PsxLoader.PSX_LANG_SPEC_ID), true));
 			}
 		}
 

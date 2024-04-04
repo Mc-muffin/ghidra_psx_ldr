@@ -149,7 +149,7 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 	
 	private static final long GP_SET_SIGNATURE_DELTA = -6L;
 	
-	public static final String PSX_LOADER = "PSX Executables Loader";
+	public static final String PSX_LOADER = "PlayStation Executable (PS-X EXE)";
 	
 	private PsxExe psxExe;
 	private static final String GPBASE = "GPBASE";
@@ -158,7 +158,7 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 	private static final String OPTION_NAME = "RAM Base Address: ";
 	private long ramBase = DEF_RAM_BASE;
 	
-	public static final String PSX_LANG_ID = "PSX:LE:32:default";
+	public static final String PSX_LANG_ID = "MIPS:LE:32:PSX";
 	public static final String PSX_LANG_SPEC_ID = "default";
 
 	@Override
@@ -175,7 +175,7 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 		psxExe = new PsxExe(reader);
 		
 		if (psxExe.isParsed()) {
-			loadSpecs.add(new LoadSpec(this, 0, new LanguageCompilerSpecPair(PSX_LANG_ID, "default"), true));
+			loadSpecs.add(new LoadSpec(this, 0, new LanguageCompilerSpecPair(PSX_LANG_ID, PSX_LANG_SPEC_ID), true));
 		}
 
 		return loadSpecs;
