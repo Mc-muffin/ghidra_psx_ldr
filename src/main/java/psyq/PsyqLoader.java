@@ -223,7 +223,7 @@ public class PsyqLoader extends AbstractLibrarySupportLoader {
 		BinaryReader reader = new BinaryReader(provider, true);
 		reader.setPointerIndex(4);
 		
-		monitor.clearCanceled();
+		monitor.clearCancelled();
 
 		while (true) {
 			if (monitor.isCancelled()) {

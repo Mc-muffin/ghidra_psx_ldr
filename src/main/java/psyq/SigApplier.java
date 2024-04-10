@@ -127,7 +127,7 @@ public final class SigApplier {
 		
 		monitor.initialize(totalObjs);
 		monitor.setMessage("Applying obj symbols...");
-		monitor.clearCanceled();
+		monitor.clearCancelled();
 		
 		Map<String, Pair<Long, Float>> objsList = new HashMap<>();
 		
