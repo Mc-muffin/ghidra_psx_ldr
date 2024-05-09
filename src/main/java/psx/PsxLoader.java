@@ -213,8 +213,12 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 	protected void load(ByteProvider provider, LoadSpec loadSpec, List<Option> options, Program program, TaskMonitor monitor, MessageLog log)
 			throws IOException {
 		
+		Options dOpts = program.getOptions(Program.DISASSEMBLER_PROPERTIES);
+		dOpts.setBoolean(Disassembler.RESTRICT_DISASSEMBLY_TO_EXECUTE_MEMORY_PROPERTY, true);
 		Options aOpts = program.getOptions(Program.ANALYSIS_PROPERTIES);
-		aOpts.setBoolean("Non-Returning Functions - Discovered", false);
+		aOpts.setBoolean("Non-Returning Functions - Discovered", false); // FindNoReturnFunctionsAnalyzer.NAME
+		aOpts.setBoolean("MIPS Constant Reference Analyzer.Assume T9 set to Function entry", false);
+		aOpts.setBoolean("MIPS Constant Reference Analyzer.Mark dual instruction references", true);
 
 		if (!psxExe.isParsed()) {
 			monitor.setMessage(String.format("%s : Cannot load", getName()));
@@ -367,6 +371,7 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 			if (!psyqVersion.isEmpty()) {
 				String subVer = psyqVersion.substring(2);
 				String ver = String.format("%s.%s%s", psyqVersion.charAt(0), psyqVersion.charAt(1), !subVer.equals("00") ? String.format(".%s", subVer) : "");
+				program.setCompiler("ccpsx");
 				opts.setString(PSYQ_VER_OPTION, ver);
 			}
 		} catch (MemoryAccessException | AddressOutOfBoundsException | IOException ignored) {
