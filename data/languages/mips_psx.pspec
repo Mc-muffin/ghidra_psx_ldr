@@ -3,7 +3,7 @@
 <processor_spec>
   <properties>
     <property key="addressesDoNotAppearDirectlyInCode" value="true"/>
-    <property key="emulateInstructionStateModifierClass" value="ghidra.program.emulation.MIPSEmulateInstructionStateModifier"/>
+    <property key="pcodeInjectLibraryClass" value="ghidra.program.model.lang.PsxPcodeInjectLibrary"/>
     <property key="assemblyRating:MIPS:LE:32:PSX" value="PLATINUM"/>
   </properties>
   <programcounter register="pc"/>

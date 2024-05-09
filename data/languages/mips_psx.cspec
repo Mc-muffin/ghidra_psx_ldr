@@ -125,6 +125,14 @@
   	<output>
   	</output>
   </prototype>
-<!-- PSX -->
+
+  <callotherfixup targetop="trap">
+    <pcode>
+      <input name="brkcode" size="4"/>
+      <body><![CDATA[
+        break(brkcode);
+      ]]></body>
+    </pcode>
+  </callotherfixup>
 
 </compiler_spec>
