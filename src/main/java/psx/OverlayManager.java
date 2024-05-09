@@ -401,7 +401,7 @@ public class OverlayManager extends JPanel {
 					
 					Memory mem = program.getMemory();
 					AddressSpace defSpace = program.getAddressFactory().getDefaultAddressSpace();
-					
+
 					int tranId = program.startTransaction(String.format("Creating overlayed block %s from a binary", blockName.getText()));
 
 					AddInitializedMemoryBlockCmd cmd = new AddInitializedMemoryBlockCmd(
@@ -428,7 +428,7 @@ public class OverlayManager extends JPanel {
 					Msg.showError(this, OverlayManager.this, "Error", "Cannot read overlay file!", e1);
 				} catch (MemoryAccessException e1) {
 					Msg.showError(this, OverlayManager.this, "Error", "Cannot set block data!", e1);
-				} catch (NoValueException e1) {
+				} catch (NumberFormatException e1) {
 					Msg.showError(this, OverlayManager.this, "Error", "Cannot get GP value!", e1);
 				}
 			}

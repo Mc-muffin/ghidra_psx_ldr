@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.StructConverter;
+import ghidra.program.model.data.AlignmentDataType;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.data.Structure;
 import ghidra.program.model.data.StructureDataType;
@@ -126,7 +127,8 @@ public class PsxExe implements StructConverter {
 	public DataType toDataType() {
 		Structure s = new StructureDataType("PsxHeader", 0);
 		
-		s.add(ASCII, 16, "ascii_id", null);
+		s.add(STRING, 8, "ascii_id", null);
+		s.add(new AlignmentDataType(), 8, null, null);
 		
 		s.add(POINTER, 4, "init_pc", null);
 		s.add(POINTER, 4, "init_gp", null);
@@ -143,8 +145,8 @@ public class PsxExe implements StructConverter {
 		s.add(POINTER, 4, "sp_base", null);
 		s.add(DWORD, 4, "sp_offs", null);
 		
-		s.add(ASCII, 0x14, "reserved_a", null);
-		s.add(ASCII, HEADER_SIZE - 0x4C, "marker", null);
+		s.add(new AlignmentDataType(), 0x14, "reserved_a", null);
+		s.insertAtOffset(0x4C, STRING, HEADER_SIZE - 0x4C, "marker", null);
 		
 		return s;
 	}

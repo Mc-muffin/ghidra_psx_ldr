@@ -34,6 +34,7 @@ import ghidra.app.cmd.function.CreateFunctionCmd;
 import ghidra.app.plugin.core.analysis.AutoAnalysisManager;
 import ghidra.app.plugin.core.datamgr.archive.DuplicateIdException;
 import ghidra.app.services.DataTypeManagerService;
+import ghidra.app.util.MemoryBlockUtils;
 import ghidra.app.util.Option;
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.ByteProvider;
@@ -46,6 +47,8 @@ import ghidra.framework.Application;
 import ghidra.framework.model.DomainObject;
 import ghidra.framework.options.Options;
 import ghidra.framework.store.LockException;
+import ghidra.program.database.mem.FileBytes;
+import ghidra.program.disassemble.Disassembler;
 import ghidra.program.flatapi.FlatProgramAPI;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressOutOfBoundsException;
@@ -87,7 +90,6 @@ import ghidra.program.model.util.CodeUnitInsertionException;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.exception.InvalidInputException;
-import ghidra.util.exception.NoValueException;
 import ghidra.util.exception.NotFoundException;
 import ghidra.util.task.TaskMonitor;
 import psyq.DetectPsyQ;
@@ -102,46 +104,49 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 
 	private static final long DEF_RAM_BASE = 0x80000000L;
 	public static final long RAM_SIZE = 0x200000L;
+	private static final long _initheap_off = -0x10;
 	private static final long __heapbase_off = -0x30;
-	private static final long _sbss_off = -0x28;
-	private static final long _sdata_off = -0x20;
+
+	private static final int READ = MemoryBlock.READ;
+	private static final int WRITE = MemoryBlock.WRITE;
+	private static final int EXECUTE = MemoryBlock.EXECUTE;
 	
 	private static final byte[] MAIN_SIGN_47 = new byte[]{
-			0x00, 0x00, 0x00, 0x0C, // jal main
-			0x00, 0x00, 0x00, 0x00, // nop
-			0x01, 0x00, 0x04, 0x3C, 0x00, 0x00, 0x00, 0x00, // la $a0, dword_xx010000
-			0x01, 0x00, 0x05, 0x3C, 0x00, 0x00, 0x00, 0x00, // la $a1, dword_xx010000
-			0x00, 0x00, 0x00, 0x0C, // jal __sn_cpp_structors
-			0x00, 0x00, 0x00, 0x00, // nop
-			0x4D, 0x00, 0x00, 0x00, // break 1
+			0x00, 0x00, 0x00, 0x0C,                                           // jal main
+			0x00, 0x00, 0x00, 0x00,                                           // nop
+			0x01, 0x00, 0x04, 0x3C, 0x00, 0x00, 0x00, 0x00,                   // la $a0, dword_xx010000
+			0x01, 0x00, 0x05, 0x3C, 0x00, 0x00, 0x00, 0x00,                   // la $a1, dword_xx010000
+			0x00, 0x00, 0x00, 0x0C,                                           // jal __sn_cpp_structors
+			0x00, 0x00, 0x00, 0x00,                                           // nop
+			0x4D, 0x00, 0x00, 0x00,                                           // break 1
 	};
 
 	private static final byte[] MAIN_SIGN_MASK_47 = new byte[]{
-			0x00, 0x00, 0x00, (byte)0xFF, // jal main
-			(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, // nop
+			0x00, 0x00, 0x00, (byte)0xFF,                                     // jal main
+			(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF,                   // nop
 			(byte)0xFF, 0x00, (byte)0xFF, (byte)0xFF, 0x00, 0x00, 0x00, 0x00, // la $a0, dword_xx010000
 			(byte)0xFF, 0x00, (byte)0xFF, (byte)0xFF, 0x00, 0x00, 0x00, 0x00, // la $a1, dword_xx010000
-			0x00, 0x00, 0x00, (byte)0xFF, // jal __sn_cpp_structors
-			(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, // nop
-			(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, // break 1
+			0x00, 0x00, 0x00, (byte)0xFF,                                     // jal __sn_cpp_structors
+			(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF,                   // nop
+			(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF,                   // break 1
 	};
 	
 	private static final byte[] MAIN_SIGN_37_46 = new byte[]{
-			0x00, 0x00, 0x00, 0x00, // nop
-			0x00, 0x00, 0x00, 0x0C, // jal __sn_cpp_structors
-			0x00, 0x00, 0x00, 0x00, // nop
-			0x4D, 0x00, 0x00, 0x00, // break 1
+			0x00, 0x00, 0x00, 0x00,                                           // nop
+			0x00, 0x00, 0x00, 0x0C,                                           // jal main
+			0x00, 0x00, 0x00, 0x00,                                           // nop
+			0x4D, 0x00, 0x00, 0x00,                                           // break 1
 	};
 
 	private static final byte[] MAIN_SIGN_MASK_37_46 = new byte[]{
-			(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, // nop
-			0x00, 0x00, 0x00, (byte)0xFF, // jal main
-			(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, // nop
-			(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF, // break 1
+			(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF,                   // nop
+			0x00, 0x00, 0x00, (byte)0xFF,                                     // jal main
+			(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF,                   // nop
+			(byte)0xFF, (byte)0xFF, (byte)0xFF, (byte)0xFF,                   // break 1
 	};
 	
 	private static final byte[] GP_SET_SIGNATURE = new byte[] {
-			(byte)0x9C, 0x27, 0x21, (byte)0xF0, (byte)0xA0, 0x03 // li gp, 0xADDR; move $fp, $sp
+			(byte)0x9C, 0x27, 0x21, (byte)0xF0, (byte)0xA0, 0x03              // li gp, 0xADDR; move $fp, $sp
 	};
 	
 	private static final byte[] GP_SET_SIGNATURE_MASK = new byte[] {
@@ -256,11 +261,11 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 		
 		try {
 			segments = createSegments(provider, fpa, log);
-		} catch (AddressOverflowException | IOException e1) {
-			log.appendException(e1);
+		} catch (Exception e) {
+			log.appendException(e);
 			return;
 		}
-		
+
 		final Address initPc = fpa.toAddr(psxExe.getInitPc());
 		
 		setFunction(program, initPc, "start", true, true, log);
@@ -306,7 +311,7 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 		Reference mainRef = findAndAppyMain(provider, fpa, romStart, log);
 		
 		if (mainRef != null) {
-			createCompilerSegments(provider, fpa, romStart, romEnd, mainRef, log);
+			createCompilerSegments(provider, fpa, romStart, romEnd, initPc, mainRef, log);
 		}
 		
 		monitor.setMessage("Loading PSX binary done.");
@@ -560,192 +565,23 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 		return jalMainRefs[0];
 	}
 	
-	private void createCompilerSegments(ByteProvider provider, FlatProgramAPI fpa, Address searchAddress, Address romEnd, Reference mainRef, MessageLog log) {
-		Program program = fpa.getCurrentProgram();
-		Memory mem = program.getMemory();
-		Listing listing = program.getListing();
-		BinaryReader reader = new BinaryReader(provider, true);
-		
-		Address mainRefAddr = mainRef.getFromAddress();
-		
-		// Instruction offsets assume that a jal InitHeap() instruction and subsequent addiu (in delay slot) exist.
-		// Some games do not have that pair of instructions, so adjust offsets by two instructions if that is the case.
-		Instruction initHeapDelay = listing.getInstructionAt(mainRefAddr.add(-4 * 4));
-		long initHeapAdjustment = initHeapDelay.isInDelaySlot() ? 0 : 8;
-		
-		Instruction heapBaseInstr_1 = listing.getInstructionAt(mainRefAddr.add(__heapbase_off + initHeapAdjustment));
-		Instruction heapBaseInstr_2 = listing.getInstructionAt(mainRefAddr.add(__heapbase_off + initHeapAdjustment).add(4));
-		Instruction sbssInstr1 = listing.getInstructionAt(mainRefAddr.add(_sbss_off + initHeapAdjustment));
-		Instruction sbssInstr2 = listing.getInstructionAt(mainRefAddr.add(_sbss_off + initHeapAdjustment).add(4));
-		
-		if (heapBaseInstr_1 == null || heapBaseInstr_2 == null ||
-				sbssInstr1 == null || sbssInstr2 == null) {
-			return;
-		}
-		
-		Scalar heapBase1 = heapBaseInstr_1.getScalar(1);
-		Object[] heapBase2 = heapBaseInstr_2.getOpObjects(1);
-		Scalar sbss1 = sbssInstr1.getScalar(1);
-		Object[] sbss2 = sbssInstr2.getOpObjects(1);
-		
-		if (heapBase1 == null || heapBase2 == null || heapBase2.length != 2 ||
-				sbss1 == null || sbss2 == null || sbss2.length != 2) {
-			return;
-		}
-		
-		try {
-			Address structPtr = fpa.toAddr((heapBase1.getUnsignedValue() << 16) + ((Scalar)(heapBase2[0])).getSignedValue());
-
-			Address _text_ptr = structPtr.add(0x08);
-			long _text = reader.readUnsignedInt(_text_ptr.subtract(searchAddress.subtract(PsxExe.HEADER_SIZE)));
-			long _textlen = reader.readUnsignedInt(_text_ptr.add(4).subtract(searchAddress.subtract(PsxExe.HEADER_SIZE)));
-			
-			_textlen = _textlen == 0L ? 4L : _textlen;
-			
-			Address _text_addr = fpa.toAddr(_text);
-			MemoryBlock _text_block = mem.getBlock(_text_addr);
-			
-			boolean normalOrder = false;
-			if (_text_block.getStart().getOffset() < _text_addr.getOffset()) {
-				mem.split(_text_block, _text_addr);
-				normalOrder = true;
-			}
-			
-			if (normalOrder) {
-				Address _rdata_addr = _text_block.getStart();
-				MemoryBlock _rdata_block = mem.getBlock(_rdata_addr);
-				_rdata_block.setName(".rdata");
-				_rdata_block.setWrite(false);
-				_rdata_block.setExecute(false);
-				
-				_text_block = mem.getBlock(_text_addr);
-				_text_block.setName(".text");
-				_text_block.setWrite(false);
-				_text_block.setExecute(true);
-				mem.split(_text_block, _text_addr.add(_textlen));
-			} else {
-				Address _rdata_addr = _text_addr.add(_textlen);
-				_text_block = mem.getBlock(_text_addr);
-				_text_block.setName(".text");
-				_text_block.setWrite(false);
-				_text_block.setExecute(true);
-				mem.split(_text_block, _rdata_addr);
-				
-				MemoryBlock _rdata_block = mem.getBlock(_rdata_addr);
-				_rdata_block.setName(".rdata");
-				_rdata_block.setWrite(false);
-				_rdata_block.setExecute(false);
-			}
-
-			Address _data_ptr = structPtr.add(0x10);
-			long _data = reader.readUnsignedInt(_data_ptr.subtract(searchAddress.subtract(PsxExe.HEADER_SIZE)));
-			long _datalen = reader.readUnsignedInt(_data_ptr.add(4).subtract(searchAddress.subtract(PsxExe.HEADER_SIZE)));
-			
-			_datalen = _datalen == 0L ? 4L : _datalen;
-			
-			Address _data_addr = fpa.toAddr(_data);
-			MemoryBlock _data_block = mem.getBlock(_data_addr);
-			
-			if (_data_block.getStart().getOffset() < _data_addr.getOffset()) {
-				mem.split(_data_block, _data_addr);
-				_data_block = mem.getBlock(_data_addr);
-			}
-			
-			_data_block.setName(".data");
-			_data_block.setWrite(true);
-			_data_block.setExecute(false);
-			
-			if (_data_block.getSize() > _datalen) {
-				mem.split(_data_block, _data_addr.add(_datalen));
-			}
-			
-			Address _sdata_addr = _data_addr.add(_datalen);
-			MemoryBlock _sdata_block = mem.getBlock(_sdata_addr);
-			_sdata_block.setName(".sdata");
-			_sdata_block.setWrite(true);
-			_sdata_block.setExecute(false);
-			
-			Address _sbss_addr = fpa.toAddr((sbss1.getUnsignedValue() << 16) + ((Scalar)(sbss2[0])).getSignedValue());
-			MemoryBlock _sbss_block = mem.getBlock(_sbss_addr);
-			
-			if (_sbss_block.getStart().getOffset() < _sbss_addr.getOffset()) {
-				Address _sbss_start = _sbss_block.getStart();
-				
-				mem.split(_sbss_block, _sbss_addr);
-				_sbss_block = mem.getBlock(_sbss_addr);
-				_sbss_block.setName(".sbss");
-				
-				MemoryBlock ram = mem.getBlock(_sbss_start);
-				
-				if (!ram.equals(_sdata_block)) {
-					ram.setWrite(true);
-					ram.setExecute(true);
-				}
-			}
-
-			_sbss_block.setWrite(true);
-			_sbss_block.setExecute(false);
-			
-			Address _bss_ptr = structPtr.add(0x18);
-			long _bss = reader.readUnsignedInt(_bss_ptr.subtract(searchAddress.subtract(PsxExe.HEADER_SIZE)));
-			long _bsslen = reader.readUnsignedInt(_bss_ptr.add(4).subtract(searchAddress.subtract(PsxExe.HEADER_SIZE)));
-			
-			_bsslen = _bsslen == 0L ? 4L : _bsslen;
-			
-			Address _bss_addr = fpa.toAddr(_bss);
-			MemoryBlock _bss_block = mem.getBlock(_bss_addr);
-			mem.split(_bss_block, _bss_addr);
-			
-			_bss_block = mem.getBlock(_bss_addr);
-			_bss_block.setName(".bss");
-			_bss_block.setWrite(true);
-			_bss_block.setExecute(false);
-			
-			Address lastRam = _bss_addr.add(_bsslen);
-			if (_bss_block.getSize() < _bsslen) {
-				MemoryBlock block2 = mem.getBlock(lastRam);
-				mem.join(_bss_block, block2);
-				_bss_block = mem.getBlock(_bss_addr);
-			}
-			
-			mem.split(_bss_block, lastRam);
-			
-			if (_sbss_block.isInitialized()) {
-				mem.convertToUninitialized(_sbss_block);
-			}
-			
-			if (_bss_block.isInitialized()) {
-				mem.convertToUninitialized(_bss_block);
-			}
-			
-			MemoryBlock ram = mem.getBlock(lastRam);
-			if (romEnd.compareTo(ram.getEnd()) > 0) {
-				ram.setName(".text");
-				ram.setWrite(false);
-				ram.setExecute(true);
-			} else {
-				ram.setName("RAM");
-				ram.setWrite(true);
-				ram.setExecute(true);
-			}
-		} catch (IOException | MemoryBlockException | LockException | NotFoundException e) {
-			log.appendException(e);
-		}
-	}
 	
-	private List<AddressRange> createSegments(ByteProvider provider, FlatProgramAPI fpa, MessageLog log) throws IOException, AddressOverflowException {
+	private List<AddressRange> createSegments(ByteProvider provider, FlatProgramAPI fpa, MessageLog log) throws AddressOverflowException, CancelledException, IOException {
 		List<AddressRange> res = new ArrayList<>();
+		var bytes = MemoryBlockUtils.createFileBytes(fpa.getCurrentProgram(), provider, 0L, provider.length(), TaskMonitor.DUMMY);
 		
-		InputStream codeStream = provider.getInputStream(PsxExe.HEADER_SIZE);
+		var hdrAddr = AddressSpace.OTHER_SPACE.getAddress(ramBase);
+		var hdrBlock = createFileSegment(fpa, bytes, "HEADER", hdrAddr, 0L, PsxExe.HEADER_SIZE, false, false, false, log);
+		createNamedStruct(fpa, hdrBlock.getStart(), psxExe.toDataType(), null, log);
 		
 		long ram_size_1 = psxExe.getRomStart() - ramBase;
-		createSegment(fpa, null, "RAM", ramBase, ram_size_1, true, true, log);
-		res.add(new AddressRangeImpl(fpa.toAddr(ramBase), ram_size_1));
-		
+		createSegment(fpa, null, "KERNEL", ramBase, ram_size_1, false, true, log).setRead(false);		res.add(new AddressRangeImpl(fpa.toAddr(ramBase), ram_size_1));
+		// Unfortunately also creating a kernel segment at 0x0 confuses the address table analyzer pretty badly.
+
 		long code_size = psxExe.getRomSize();
 		long code_addr = psxExe.getRomStart();
 		
-		createSegment(fpa, codeStream, "CODE", code_addr, code_size, false, true, log);
+		createFileSegment(fpa, bytes, "CODE", fpa.toAddr(code_addr), PsxExe.HEADER_SIZE, code_size, true, true, true, log);
 		res.add(new AddressRangeImpl(fpa.toAddr(code_addr), code_size));
 		
 		if (psxExe.getDataAddr() != 0) {
@@ -754,13 +590,13 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 		}
 		
 		if (psxExe.getBssAddr() != 0) {
-			createSegment(fpa, null, ".bss", psxExe.getBssAddr(), psxExe.getBssSize(), false, false, log);
+			createSegment(fpa, null, ".bss", psxExe.getBssAddr(), psxExe.getBssSize(), true, false, log);
 			res.add(new AddressRangeImpl(fpa.toAddr(psxExe.getBssAddr()), psxExe.getBssSize()));
 		}
 		
 		long code_end = psxExe.getRomEnd();
 		long ram_size_2 = ramBase + RAM_SIZE - code_end;
-		createSegment(fpa, null, "RAM", code_end, ram_size_2, false, true, log);
+		createSegment(fpa, null, "RAM", code_end, ram_size_2, false, false, log).setRead(false);
 		res.add(new AddressRangeImpl(fpa.toAddr(code_end), ram_size_2));
 		
 		createSegment(fpa, null, "CACHE", 0x1F800000L, 0x400, true, true, log);
@@ -780,6 +616,173 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 		
 		return res;
 	}
+	
+	private void createCompilerSegments(ByteProvider provider, FlatProgramAPI fpa, Address romStart, Address romEnd, Address startFunc, Reference mainRef, MessageLog log) {
+		Program program = fpa.getCurrentProgram();
+		Program program = fpa.getCurrentProgram();
+		Memory mem = program.getMemory();
+		Listing listing = program.getListing();
+		BinaryReader reader = new BinaryReader(provider, true);
+		BinaryReader reader = new BinaryReader(provider, true);
+		
+		Address mainRefAddr = mainRef.getFromAddress();
+		// Games that link NOHEAP.OBJ will have two fewer instructions in their start routine - a JAL and ADDIU pair
+		// that calls InitHeap, situated between the call to main and the rest of the start routine.
+		Instruction initHeapDelay = listing.getInstructionAt(mainRefAddr.add(_initheap_off));
+		long noheapOffset = initHeapDelay.isInDelaySlot() ? 0 : 8;
+		
+		Instruction heapBaseInstr_1 = listing.getInstructionAt(mainRefAddr.add(__heapbase_off + noheapOffset));
+		Instruction heapBaseInstr_2 = listing.getInstructionAt(mainRefAddr.add(__heapbase_off + noheapOffset).add(4));
+		Instruction sbssInstr1 = listing.getInstructionAt(startFunc);
+		Instruction sbssInstr2 = listing.getInstructionAt(startFunc.add(4));
+		
+		if (heapBaseInstr_1 == null || heapBaseInstr_2 == null ||
+				 sbssInstr1 == null || sbssInstr2 == null) {
+			return;
+		}
+		
+		Scalar heapBase1 = heapBaseInstr_1.getScalar(1);      // lui    at,     0xUPPR     -> scalar(1)    = 0xUPPR
+		Object[] heapBase2 = heapBaseInstr_2.getOpObjects(1); // sw     a0      0xLOWR(at) -> opObjects(1) = 0xLOWR(at)
+		Scalar sbss1 = sbssInstr1.getScalar(1);               // lui    v0,     0xUPPR     -> scalar(1)    = 0xUPPR
+		Object[] sbss2 = sbssInstr2.getOpObjects(2);          // addiu  v0, v0, 0xLOWR     -> opObjects(2) = 0xLOWR
+		
+		if (heapBase1 == null || heapBase2 == null || heapBase2.length != 2 ||
+				sbss1 == null || sbss2 == null     || sbss2.length != 1) {
+			return;
+		}
+
+		/**
+		The default linker section layout looks like:
+
+			text    group
+			bss     group   bss
+
+				section .rdata,	text
+				section .text,	text
+				section .data,	text
+				section .sdata,	text
+				section .sbss,	bss
+				section .bss,	bss
+		 
+		Developers were free to add sections after these, and they often did. Specified sections could be missing in the output
+		if the compiler found no data for them, and there can be gaps between sections, especially if GP optimization was turned
+		on. The model that is used to recover these sections looks like:
+		
+			text    group
+			bss     group   bss
+			custom  group   obj($address)		; Optional custom groups that come after the default sections (NOT OVERLAYS!)
+
+				section .rdata,	text			; Could be swapped with .text
+				section .text,	text			; Could be swapped with .rdata
+				  > possible RAM gap
+				section .data,  text
+				  > possible RAM gap
+				section .sdata,	text			; This section may not exist. GP is almost always set to this section's start address.
+				  > possible end of program		; If there are no custom groups or extra sections after .bss.
+				  > possible RAM gap			; If GP optimization is turned on, there can be a gap here where the GP is situated.
+				section .sbss,	bss				; Always exists and is at least 8 bytes due to being included in LIBSN.LIB.
+				section .bss,	bss
+				  > possible end of program
+				section custom.text, custom		; Further sections are often defined here. These are not easy to recover, unfortunately.
+				  > end of program
+		*/
+		try {
+			
+			/**
+			 * Recover section dimensions.
+			 */
+			
+			// A table of sections from LIBSN.LIB is written to during the start routine.
+			Address _sections_addr = fpa.toAddr((heapBase1.getUnsignedValue() << 16) + ((Scalar)(heapBase2[0])).getSignedValue());
+			addSectionsTableLabels(fpa, _sections_addr, log);
+			
+			// .text
+			Address _text_ptr = _sections_addr.add(0x08);
+			long _text = reader.readUnsignedInt(_text_ptr.subtract(romStart.subtract(PsxExe.HEADER_SIZE)));
+			long _textlen = reader.readUnsignedInt(_text_ptr.add(4).subtract(romStart.subtract(PsxExe.HEADER_SIZE)));
+			_textlen = _textlen == 0L ? 4L : _textlen;
+			Address _text_addr = fpa.toAddr(_text);
+			Address _text_end = _text_addr.add(_textlen);
+
+			// .data
+			Address _data_ptr = _sections_addr.add(0x10);
+			long _data = reader.readUnsignedInt(_data_ptr.subtract(romStart.subtract(PsxExe.HEADER_SIZE)));
+			long _datalen = reader.readUnsignedInt(_data_ptr.add(4).subtract(romStart.subtract(PsxExe.HEADER_SIZE)));
+			_datalen = _datalen == 0L ? 4L : _datalen;
+			Address _data_addr = fpa.toAddr(_data);
+			Address _data_end = _data_addr.add(_datalen);
+			
+			// .bss
+			Address _bss_ptr = _sections_addr.add(0x18);
+			long _bss = reader.readUnsignedInt(_bss_ptr.subtract(romStart.subtract(PsxExe.HEADER_SIZE)));
+			long _bsslen = reader.readUnsignedInt(_bss_ptr.add(4).subtract(romStart.subtract(PsxExe.HEADER_SIZE)));
+			_bsslen = _bsslen == 0L ? 4L : _bsslen;
+			Address _bss_addr = fpa.toAddr(_bss);
+			Address _bss_end = _bss_addr.add(_bsslen);
+			
+			// .sbss
+			long _sbss = (sbss1.getUnsignedValue() << 16) + ((Scalar)(sbss2[0])).getSignedValue();
+			Address _sbss_addr = fpa.toAddr(_sbss);
+
+			// .sdata
+			//   May not exist depending on .sbss start address. If there are no custom sections, this is the last section before romEnd.
+			Address _sdata_addr = psxExe.getInitGp() > _sbss ? _data_end : fpa.toAddr(psxExe.getInitGp());
+			Address _sdata_end = _sbss_addr.compareTo(romEnd) >= 0 ? romEnd : _sbss_addr;
+
+
+			/**
+			 * Split memory along dimensions determined above.
+			 */
+			
+			MemoryBlock next = mem.getBlock(romStart);
+			
+			if (romStart.compareTo(_text_addr) < 0) {
+				next = splitSegment(mem, next, romStart, _text_addr, ".rdata", READ, true);
+				next = splitSegment(mem, next, _text_addr, _text_end, ".text", EXECUTE, true);
+			} else {
+				next = splitSegment(mem, next, romStart, _text_end, ".text", EXECUTE, true);
+				next = splitSegment(mem, next, _text_end, _data_addr, ".rdata", READ, true);
+			}
+			
+			next = splitSegment(mem, next, _data_addr, _data_end, ".data", READ | WRITE, true);
+			next = splitSegment(mem, next, _sdata_addr, _sdata_end, ".sdata", READ | WRITE, true);
+			next = splitSegment(mem, next, _sbss_addr, _bss_addr, ".sbss", READ | WRITE, false);
+			next = splitSegment(mem, next, _bss_addr, _bss_end, ".bss", READ | WRITE, false);
+		} catch (IOException | MemoryBlockException | LockException | NotFoundException e) {
+			log.appendException(e);
+		}
+	}
+
+	private MemoryBlock splitSegment(Memory mem, MemoryBlock block, Address start, Address end, final String name, int rwx, boolean initialized)
+			throws MemoryBlockException, LockException, NotFoundException {
+		
+		if (end.compareTo(start) <= 0)
+			return block; // Can happen to .sdata.
+		
+		if (!block.contains(start))
+			block = mem.getBlock(start); // Can happen when creating .sbss if there's an undefined block running up to romEnd.
+
+		final String blockName = mem.getBlock(end).getName(); // Save next name now before split renames it.
+
+		if (block.getStart().compareTo(start) < 0) {
+			mem.split(block, start); // Create a gap between sections, if one exists.
+			block = mem.getBlock(start);
+		}
+		
+		if (end.compareTo(block.getEnd()) < 0)
+			mem.split(block, end); // Split at the end of the segment, unless it's the last segment in its parent block.
+
+		block.setName(name);
+		block.setPermissions((rwx & READ) > 0, (rwx & WRITE) > 0, (rwx & EXECUTE) > 0);
+		if (!initialized && block.isInitialized())
+			mem.convertToUninitialized(block); // If there are no custom segments, .(s)bss is split from RAM and already uninitialized.
+		
+		block = mem.getBlock(end);
+		block.setName(blockName); // Recover next segment's original name so that gaps are not named strangely.
+
+		return mem.getBlock(end);
+	}
+			
 	
 	public static final String GTEMAC = "GTEMAC";
 	
@@ -1075,6 +1078,19 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 		createNamedDword(fpa, 0x1F801DBCL, "SPU_UNKN_1DBC", log);
 	}
 	
+	private static void addSectionsTableLabels(FlatProgramAPI fpa, Address tableAddr, MessageLog log) {
+		long addr = tableAddr.getOffset();
+		createNamedDword(fpa, addr - 4, "__initialized", log);
+		createNamedPointer(fpa, addr + 0, "__heapbase", log);
+		createNamedDword(fpa, addr + 4, "__heapsize", log);
+		createNamedPointer(fpa, addr + 8, "__text", log);
+		createNamedDword(fpa, addr + 12, "__textlen", log);
+		createNamedPointer(fpa, addr + 16, "__data", log);
+		createNamedDword(fpa, addr + 20, "__datalen", log);
+		createNamedPointer(fpa, addr + 24, "__bss", log);
+		createNamedDword(fpa, addr + 28, "__bsslen", log);
+	}
+	
 	private static void createNamedByte(FlatProgramAPI fpa, long address, String name, MessageLog log) {
 		try {
 			fpa.createByte(fpa.toAddr(address));
@@ -1119,17 +1135,64 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 			log.appendException(e);
 		}
 	}
-	
-	private static void createSegment(FlatProgramAPI fpa, InputStream stream, String name, long address, long size, boolean write, boolean execute, MessageLog log) {
-		MemoryBlock block;
+
+	private static void createNamedPointer(FlatProgramAPI fpa, long address, String name, MessageLog log) {
+		try {
+			fpa.createData(fpa.toAddr(address), PointerDataType.dataType);
+		} catch (Exception e) {
+			log.appendException(e);
+			return;
+		}
+		
+		try {
+			fpa.getCurrentProgram().getSymbolTable().createLabel(fpa.toAddr(address), name, SourceType.IMPORTED);
+		} catch (InvalidInputException e) {
+			log.appendException(e);
+		}
+	}
+
+	private static void createNamedStruct(FlatProgramAPI fpa, Address address, DataType dt, String name, MessageLog log) {
+		try {
+			fpa.createData(address, dt);
+		} catch (Exception e) {
+			log.appendException(e);
+			return;
+		}
+		
+		if (name == null)
+			return;
+		
+		try {
+			fpa.getCurrentProgram().getSymbolTable().createLabel(address, name, SourceType.IMPORTED);
+		} catch (InvalidInputException e) {
+			log.appendException(e);
+		}
+	}
+
+	private static MemoryBlock createSegment(FlatProgramAPI fpa, InputStream stream, String name, long address, long size, boolean write, boolean execute, MessageLog log) {
+		MemoryBlock block = null;
 		try {
 			block = fpa.createMemoryBlock(name, fpa.toAddr(address), stream, size, false);
-			block.setRead(true);
-			block.setWrite(write);
-			block.setExecute(execute);
+			block.setPermissions(true, write, execute);
 		} catch (Exception e) {
 			log.appendException(e);
 		}
+		
+		return block;
+	}
+	
+	private static MemoryBlock createFileSegment(FlatProgramAPI fpa, FileBytes bytes, String name, Address address, long offset, long size, boolean read, boolean write, boolean execute, MessageLog log) {
+		MemoryBlock block = null;
+		try {
+			block = MemoryBlockUtils.createInitializedBlock(
+					fpa.getCurrentProgram(), address.isNonLoadedMemoryAddress(),
+					name, address, bytes, offset, size, null, null, read, write, execute, log);
+		}
+		catch (Exception e) {
+			log.appendException(e);
+		}
+		
+		return block;
 	}
 	
 	private static void createUnitializedSegment(Program program, String name, Address address, long size, boolean write, boolean execute, MessageLog log) throws LockException, IllegalArgumentException, MemoryConflictException, AddressOverflowException {
