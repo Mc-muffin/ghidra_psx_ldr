@@ -120,13 +120,13 @@
 }
 
 :cfc0 RT, RD0                is prime=0x10 & copop=2 & RT & RD0 & bigfunct=0 {
-    RT = sext( RD0:4 );
+    RT = RD0:4;
 }
 
 # 0100 1000 010t tttt ssss s000 0000 0000
 :cfc2 RT, immed                 is prime=0x12 & copop=2 & RT & immed {
     tmp:4 = getCopControlWord( 2:1, immed:4 );
-    RT = sext(tmp);
+    RT = tmp;
 }
 
 # Special case of ADDU
@@ -152,13 +152,13 @@
 
 # 0000 00ss ssst tttt 0000 0000 0001 1010
 :div RS32src, RT32src               is prime=0 & fct=0x1A & RS32src & RT32src & rd=0 & sa=0 {
-    lo = sext(RS32src s/ RT32src); 
-    hi = sext(RS32src s% RT32src); 
+    lo = RS32src s/ RT32src; 
+    hi = RS32src s% RT32src; 
 }
 # 0000 00ss ssst tttt 0000 0000 0001 1011
 :divu RS32src, RT32src              is prime=0 & fct=0x1B & RS32src & RT32src & rd=0 & sa=0 {
-    lo = sext(RS32src / RT32src); 
-    hi = sext(RS32src % RT32src);   
+    lo = RS32src / RT32src; 
+    hi = RS32src % RT32src;   
 }
 
 # MIPS R3000 and prior only, replaced with ERET in R4000 and later
@@ -236,12 +236,12 @@
 # 0011 1100 000t tttt iiii iiii iiii iiii
 :lui RT, immed                  is prime=0xF & rs=0 & RT & immed {
     tmp:4 = immed << 16;
-    RT = sext(tmp); 
+    RT = tmp; 
 }
 
 # 1000 11bb bbbt tttt iiii iiii iiii iiii
 :lw RT, OFF_BASE                is prime=0x23 & OFF_BASE & RT {
-    RT = sext( *[ram]:4 OFF_BASE );
+    RT = *[ram]:4 OFF_BASE;
 }
 
 # 1100 10bb bbbt tttt iiii iiii iiii iiii
@@ -254,7 +254,7 @@
     addr:4 = OFF_BASE - shft; 
     valOrig:4 = RTsrc:4 & (0xffffffff >> ((shft+1)* 8));
     valLoad:4 = *(addr) << ((3-shft) * 8);     
-    RT = sext( valLoad | valOrig );            
+    RT = valLoad | valOrig;
 }
 
 # 1001 10bb bbbt tttt iiii iiii iiii iiii
@@ -263,7 +263,7 @@
     addr:4 = OFF_BASE - shft; 
     valOrig:4 = RTsrc:4 & (0xffffffff << ((4-shft)* 8));
     valLoad:4 = *(addr) >> (shft * 8);
-    RT = sext( valOrig | valLoad );
+    RT = valOrig | valLoad;
 }
 
 # lwl and lwr almost always come in pairs. 
@@ -272,19 +272,19 @@
 :lwl RT, OFF_BASE               is prime=0x22 & OFF_BASE & RT & PAIR_INSTRUCTION_FLAG=1 [ PAIR_INSTRUCTION_FLAG = 1; globalset(inst_next, PAIR_INSTRUCTION_FLAG);] {
 }
 :lwr RT, OFF_BASE               is prime=0x26 & OFF_BASE & RT & PAIR_INSTRUCTION_FLAG=1 [ PAIR_INSTRUCTION_FLAG = 0; ] {
-    RT = sext( *[ram]:4 OFF_BASE );    
+    RT = *[ram]:4 OFF_BASE;
 }
 
 
 # 0100 0000 000t tttt dddd d000 0000 0sss
 :mfc0 RT, RD0                   is prime=0x10 & copop=0 & RT & RD0 & bigfunct=0 {
-    RT = sext( RD0:4 );
+    RT = RD0:4;
 }
 
 # 0100 1000 000t tttt iiii iiii iiii iiii
 :mfc2 RT, immed                 is prime=0x12 & copop=0 & RT & immed {
     tmp:4 = getCopReg(2:1, immed:4);
-    RT = sext( tmp );
+    RT = tmp;
 }
 
 # Special case of ADDIU
@@ -340,9 +340,9 @@
     tmp1:8 = sext( RS32src );
     tmp2:8 = sext( RT32src );
     prod:8 = tmp1 * tmp2;
-    aclo = sext(prod:4);
+    aclo = prod:4;
     prod = prod >> 32;
-    achi = sext(prod:4);
+    achi = prod:4;
 }
 
 # 0000 00ss ssst tttt 000a a000 0001 1001
@@ -350,9 +350,9 @@
     tmp1:8 = zext( RS32src );
     tmp2:8 = zext( RT32src );
     prod:8 = tmp1 * tmp2;
-    aclo = sext(prod:4);
+    aclo = prod:4;
     prod = prod >> 32;
-    achi = sext(prod:4);
+    achi = prod:4;
 }
 
 :nal             				is prime=1 & cond=0x10 & zero21=0 {
