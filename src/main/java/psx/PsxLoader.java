@@ -624,10 +624,8 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 	
 	private void createCompilerSegments(ByteProvider provider, FlatProgramAPI fpa, Address romStart, Address romEnd, Address startFunc, Reference mainRef, MessageLog log) {
 		Program program = fpa.getCurrentProgram();
-		Program program = fpa.getCurrentProgram();
 		Memory mem = program.getMemory();
 		Listing listing = program.getListing();
-		BinaryReader reader = new BinaryReader(provider, true);
 		BinaryReader reader = new BinaryReader(provider, true);
 		
 		Address mainRefAddr = mainRef.getFromAddress();
