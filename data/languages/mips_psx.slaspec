@@ -1,9 +1,5 @@
 # SLA specification file for PSX MIPS I, 32-bit little endian
 
-@define ENDIAN "little"
-@define FREGSIZE "4"    
-@define ISA_VARIANT ""
-
 @include "mips_psx.sinc"
 @include "mips_psxInstructions.sinc"
 @include "inline_s.sinc"

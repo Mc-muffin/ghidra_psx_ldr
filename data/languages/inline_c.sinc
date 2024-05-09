@@ -13,27 +13,27 @@ define pcodeop gte_FlipRotMatrixX;
 define pcodeop gte_FlipTRX;
 
 
-is_lwc2: is $(AMODE) & REL6=0 & prime=0x32 {}
-is_lhu:  is $(AMODE) & prime=0x25 {}
-is_sra:  is $(AMODE) & prime=0 & fct=3 & rs=0 & RD {}
-is_sll:  is $(AMODE) & prime=0 & fct=0 & rs=0 & RD {}
-is_srl:  is $(AMODE) & prime=0 & fct=2 & rs=0 & RD {}
-is_or:   is $(AMODE) & prime=0 & fct=0x25 & sa=0 {}
-is_mtc2: is $(AMODE) & prime=0x12 & copop=4 {}
-is_lbu:  is $(AMODE) & prime=0x24 {}
-is_lh:   is $(AMODE) & prime=0x21 {}
-is_sb:   is $(AMODE) & prime=0x28 {}
-is_sh:   is $(AMODE) & prime=0x29 {}
-is_lw:   is $(AMODE) & prime=0x23 {}
-is_sw:   is $(AMODE) & prime=0x2B {}
-is_ctc2: is $(AMODE) & prime=0x12 & copop=6 {}
-is_swc2: is $(AMODE) & prime=0x3A {}
-is_cfc2: is $(AMODE) & prime=0x12 & copop=2 {}
-is_and:  is $(AMODE) & prime=0 & fct=0x24 & sa=0 {}
-is_subu: is $(AMODE) & prime=0 & fct=0x23 & sa=0 & RD {}
-is_addu: is $(AMODE) & prime=0 & fct=0x21 & sa=0 & RD {}
-is_addi: is $(AMODE) & REL6=0 & prime=8 & RT {}
-is_mfc2: is $(AMODE) & prime=0x12 & copop=0 {}
+is_lwc2: is prime=0x32 {}
+is_lhu:  is prime=0x25 {}
+is_sra:  is prime=0 & fct=3 & rs=0 & RD {}
+is_sll:  is prime=0 & fct=0 & rs=0 & RD {}
+is_srl:  is prime=0 & fct=2 & rs=0 & RD {}
+is_or:   is prime=0 & fct=0x25 & sa=0 {}
+is_mtc2: is prime=0x12 & copop=4 {}
+is_lbu:  is prime=0x24 {}
+is_lh:   is prime=0x21 {}
+is_sb:   is prime=0x28 {}
+is_sh:   is prime=0x29 {}
+is_lw:   is prime=0x23 {}
+is_sw:   is prime=0x2B {}
+is_ctc2: is prime=0x12 & copop=6 {}
+is_swc2: is prime=0x3A {}
+is_cfc2: is prime=0x12 & copop=2 {}
+is_and:  is prime=0 & fct=0x24 & sa=0 {}
+is_subu: is prime=0 & fct=0x23 & sa=0 & RD {}
+is_addu: is prime=0 & fct=0x21 & sa=0 & RD {}
+is_addi: is prime=8 & RT {}
+is_mfc2: is prime=0x12 & copop=0 {}
 
 @include "cop2_regs.sinc"
 

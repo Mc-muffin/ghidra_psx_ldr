@@ -130,8 +130,8 @@ define pcodeop gte_gpf0_b;
 define pcodeop gte_gpl0_b;
 
 
-is_nop: is $(AMODE) & prime=0 & rs=0 & rt=0 & rd=0 & sa=0 & fct=0 {}
-is_cop2: is $(AMODE) & prime=0x12 & bit25=1 {}
+is_nop: is prime=0 & rs=0 & rt=0 & rd=0 & sa=0 & fct=0 {}
+is_cop2: is prime=0x12 & bit25=1 {}
 is_cop2_mvmva_rt: is is_cop2 & cop2_sf=1 & cop2_mvmva1=0x12 & cop2_mvmva2=0x4 {}
 is_cop2_mvmva: is is_cop2 & cop2_sf=0 & cop2_mvmva1=0x12 & cop2_mvmva2=0x4 {}
 

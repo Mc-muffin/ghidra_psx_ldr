@@ -389,7 +389,7 @@ mfc2_12_9; mfc2_13_10; mfc2_14_11; sb_12_0 & base3; sb_13_1; sb_14_2 {
     MacroCall5($(LoadAverageCol_idx),RTsrc1,base1,RTsrc2,base2,base3);
 }
 
-is_addiu: is $(AMODE) & prime=9 {}
+is_addiu: is prime=9 {}
 addiu_x1_x2_2: is is_addiu & simmed=2 {}
 addiu_x1_x2_4: is is_addiu & simmed=4 {}
 
