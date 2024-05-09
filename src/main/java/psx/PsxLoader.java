@@ -37,6 +37,7 @@ import ghidra.app.services.DataTypeManagerService;
 import ghidra.app.util.Option;
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.ByteProvider;
+import ghidra.app.util.bin.format.elf.extend.MIPS_ElfExtension;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.app.util.opinion.AbstractLibrarySupportLoader;
 import ghidra.app.util.opinion.LoadSpec;
@@ -73,7 +74,6 @@ import ghidra.program.model.listing.Listing;
 import ghidra.program.model.listing.ParameterImpl;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.listing.ProgramContext;
-import ghidra.program.model.listing.ProgramUserData;
 import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.mem.MemoryBlock;
@@ -84,7 +84,7 @@ import ghidra.program.model.symbol.Reference;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.program.model.symbol.SymbolTable;
 import ghidra.program.model.util.CodeUnitInsertionException;
-import ghidra.program.model.util.LongPropertyMap;
+import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.exception.InvalidInputException;
 import ghidra.util.exception.NoValueException;
@@ -96,6 +96,7 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 	
 	public static final String PSYQ_VER_OPTION = "PsyQ Version";
 	public static final String GP_REG_VAL_OPTION = "GP Register";
+	public static final String GP_REG_VAL_DESC = "Initial gp register value from program header or analysis of main function.";
 	public static final String SP_REG_VAL_OPTION = "SP Register";
 	public static final String PSX_RAM_BASE_OPTION = "RAM Base Address";
 
@@ -152,8 +153,6 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 	public static final String PSX_LOADER = "PlayStation Executable (PS-X EXE)";
 	
 	private PsxExe psxExe;
-	private static final String GPBASE = "GPBASE";
-	private static final long GPBASE_ADDR = DEF_RAM_BASE + 0x1000;
 	
 	private static final String OPTION_NAME = "RAM Base Address: ";
 	private long ramBase = DEF_RAM_BASE;
@@ -298,12 +297,9 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 			}
 		}
 		
+		setGpBase(program, psxExe.getInitGp(), segments, log);
+
 		addPsyqVerOption(program, ramBase, log);
-		setGpBase(program, psxExe.getInitGp());
-		
-		for (final AddressRange range : segments) {
-			setRegisterValue(program, "gp", range.getMinAddress(), range.getMaxAddress(), psxExe.getInitGp(), log);
-		}
 		
 		Address romStart = fpa.toAddr(psxExe.getRomStart());
 		Address romEnd = fpa.toAddr(psxExe.getRomEnd());
@@ -316,35 +312,38 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 		monitor.setMessage("Loading PSX binary done.");
 	}
 	
-	public static long getGpBase(Program program) throws NoValueException {
-		ProgramUserData data = program.getProgramUserData();
-		
-		int transactionId = data.startTransaction();
-		LongPropertyMap map = data.getLongProperty(PsxPlugin.class.getName(), GPBASE, true);
-		Address objAddress = program.getAddressFactory().getDefaultAddressSpace().getAddress(GPBASE_ADDR);
-
-		data.endTransaction(transactionId);
-		if (map.hasProperty(objAddress)) {
-			return map.getLong(objAddress);
-		}
-		
-		long gpRegVal = getRegisterValue(program, "gp", program.getImageBase());
-		setGpBase(program, gpRegVal);
-		
-		return gpRegVal;
+	public static long getGpBase(Program program) throws NumberFormatException {
+		Options opts = program.getOptions(Program.PROGRAM_INFO);
+	    return opts.getLong(GP_REG_VAL_OPTION, 0L);
 	}
 	
-	public static void setGpBase(Program program, long newRamBase) {
-		ProgramUserData data = program.getProgramUserData();
-		
-		int transactionId = data.startTransaction();
-		LongPropertyMap map = data.getLongProperty(PsxPlugin.class.getName(), GPBASE, true);
-		
-		Address objAddress = program.getAddressFactory().getDefaultAddressSpace().getAddress(GPBASE_ADDR);
-		map.remove(objAddress);
-		map.add(objAddress, newRamBase);
-		
-		data.endTransaction(transactionId);
+	public static void setGpBase(Program program, long newRamBase, Iterable<AddressRange> ranges, MessageLog log) {
+	    boolean commit = false;
+	    var gpAddr = program.getAddressFactory().getDefaultAddressSpace().getAddress(newRamBase);
+
+	    int id = program.startTransaction("Set gp base address");
+	    try {
+	    	Options opts = program.getOptions(Program.PROGRAM_INFO);
+	    	if (!opts.isRegistered(GP_REG_VAL_OPTION))
+		    	opts.registerOption(GP_REG_VAL_OPTION, 0L, null, GP_REG_VAL_DESC);
+	    	
+	    	opts.setLong(GP_REG_VAL_OPTION, newRamBase);
+
+			for (final AddressRange range : ranges) {
+				setRegisterValue(program, "gp", range.getMinAddress(), range.getMaxAddress(), newRamBase, log);
+			}
+			
+		    commit = true;
+
+			String gpLabel = MIPS_ElfExtension.MIPS_GP_VALUE_SYMBOL;
+			program.getSymbolTable().createLabel(gpAddr, gpLabel, SourceType.ANALYSIS);
+	    }
+	    catch (InvalidInputException e) {
+	    	log.appendException(e);
+	    }
+	    finally {
+	    	program.endTransaction(id, commit);
+	    }
 	}
 	
 	public static DataTypeManagerService getDataTypeManagerService(Program program) {
