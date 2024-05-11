@@ -12,9 +12,12 @@ import javax.swing.event.DocumentListener;
 import docking.DialogComponentProvider;
 import docking.widgets.OptionDialog;
 import docking.widgets.textfield.HexOrDecimalInput;
-import ghidra.app.cmd.memory.AddInitializedMemoryBlockCmd;
+import ghidra.app.cmd.memory.AddFileBytesMemoryBlockCmd;
+import ghidra.app.util.MemoryBlockUtils;
+import ghidra.app.util.bin.FileByteProvider;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.framework.store.LockException;
+import ghidra.program.database.mem.FileBytes;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.Memory;
@@ -23,15 +26,17 @@ import ghidra.program.model.mem.MemoryBlock;
 import ghidra.util.MessageType;
 import ghidra.util.Msg;
 import ghidra.util.NamingUtilities;
-import ghidra.util.exception.NoValueException;
+import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.NotFoundException;
 import ghidra.util.task.TaskMonitor;
 
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.AccessMode;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -381,6 +386,20 @@ public class OverlayManager extends JPanel {
 		});
 	}
 
+	private FileBytes getFileBytes(String path) throws IOException {
+		FileBytes bytes = null;
+		var fbProvider = new FileByteProvider(new File(path), null, AccessMode.READ);
+		try {
+			bytes = MemoryBlockUtils.createFileBytes(program, fbProvider, TaskMonitor.DUMMY);
+		}
+		catch (CancelledException e) { }
+		finally {
+			fbProvider.close();
+		}
+		
+		return bytes;
+	}
+	
 	private void setNewBlockListener() {
 		JFileChooser jfc = new JFileChooser(program.getExecutablePath());
 		jfc.setDialogTitle("Please, select overlay file...");
@@ -392,45 +411,39 @@ public class OverlayManager extends JPanel {
 				if (jfc.showOpenDialog(OverlayManager.this) != JFileChooser.APPROVE_OPTION) {
 					return;
 				}
-				
+
+				Memory mem = program.getMemory();
+				AddressSpace defSpace = program.getAddressFactory().getDefaultAddressSpace();
+
+				boolean commit = false;
+				int tranId = program.startTransaction(String.format("Creating overlayed block %s from a binary", blockName.getText()));
 				try {
-					String filePath = jfc.getSelectedFile().getAbsolutePath();
-					FileInputStream fis = new FileInputStream(filePath);
-					byte[] fileData = fis.readAllBytes();
-					fis.close();
+					var bytes = getFileBytes(jfc.getSelectedFile().getAbsolutePath());
+					var cmd = new AddFileBytesMemoryBlockCmd(
+							blockName.getText(), null, OverlayManager.class.getSimpleName(),
+							defSpace.getAddressInThisSpaceOnly(blockStart.getValue()), bytes.getSize(),
+							true, true, true, false, bytes, 0L, true);
 					
-					Memory mem = program.getMemory();
-					AddressSpace defSpace = program.getAddressFactory().getDefaultAddressSpace();
-
-					int tranId = program.startTransaction(String.format("Creating overlayed block %s from a binary", blockName.getText()));
-
-					AddInitializedMemoryBlockCmd cmd = new AddInitializedMemoryBlockCmd(
-							blockName.getText(), null, filePath, defSpace.getAddressInThisSpaceOnly(blockStart.getValue()),
-							fileData.length,
-							true, true, true, false, (byte) 0x00, true);
 					cmd.applyTo(program);
-					
-					MemoryBlock block = mem.getBlock(blockName.getText());
-					mem.setBytes(block.getStart(), fileData);
-					
-					program.endTransaction(tranId, true);
 					
 					MessageLog log = new MessageLog();
 					long psxGpReg = PsxLoader.getGpBase(program);
+					MemoryBlock block = mem.getBlock(blockName.getText());
 					PsxLoader.setRegisterValue(program, "gp", block.getStart(), block.getEnd(), psxGpReg, log);
-					
-					refreshBlocks();
-					checkNameAndAddress();
-					updateOvrName(true);
-					
+					commit = true;
+
 					Msg.showInfo(this, OverlayManager.this, "Information", "Overlay block has been created!");
 				} catch (IOException e1) {
 					Msg.showError(this, OverlayManager.this, "Error", "Cannot read overlay file!", e1);
-				} catch (MemoryAccessException e1) {
-					Msg.showError(this, OverlayManager.this, "Error", "Cannot set block data!", e1);
 				} catch (NumberFormatException e1) {
 					Msg.showError(this, OverlayManager.this, "Error", "Cannot get GP value!", e1);
+				} finally {
+					program.endTransaction(tranId, commit);
 				}
+
+				refreshBlocks();
+				checkNameAndAddress();
+				updateOvrName(true);
 			}
 		});
 	}
