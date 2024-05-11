@@ -110,7 +110,7 @@ public class LibgpuMacroDetector {
 				put(0x62, "setTile() + setSemiTrans(tile, 1)");
 			}
 		};
-
+		
 		CodeManager codeManager = ((ProgramDB) program).getCodeManager();
 		FunctionManager functionManager = program.getFunctionManager();
 		DecompileOptions options = new DecompileOptions();
@@ -120,12 +120,19 @@ public class LibgpuMacroDetector {
 			throw new DecompileException("Fatal error", "The decompiler was unable to open the program.");
 		}
 
+		monitor.initialize(functionManager.getFunctionCount());
+		String msg = "Applying GTE Macros";
+		monitor.setMessage(msg);
+
 		ArrayList<String> logLines = new ArrayList<String>();
 
 		for (Function function : functionManager.getFunctions(startAddr, true)) {
 			if (monitor.isCancelled() || function.getEntryPoint().getOffset() > endAddr.getOffset()) {
 				break;
 			}
+			
+			monitor.increment();
+			monitor.setMessage(String.format("%s at 0x%08X", msg, function.getEntryPoint().getOffset()));
 
 			// sprintf() triggers a huge amount of false positives for setPolyG3().
 			String functionName = function.getName();
