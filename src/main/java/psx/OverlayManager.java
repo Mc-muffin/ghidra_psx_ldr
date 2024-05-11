@@ -420,7 +420,7 @@ public class OverlayManager extends JPanel {
 				try {
 					var bytes = getFileBytes(jfc.getSelectedFile().getAbsolutePath());
 					var cmd = new AddFileBytesMemoryBlockCmd(
-							blockName.getText(), null, OverlayManager.class.getSimpleName(),
+							blockName.getText(), null, null,
 							defSpace.getAddressInThisSpaceOnly(blockStart.getValue()), bytes.getSize(),
 							true, true, true, false, bytes, 0L, true);
 					
