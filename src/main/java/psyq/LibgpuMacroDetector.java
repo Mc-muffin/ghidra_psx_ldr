@@ -131,7 +131,7 @@ public class LibgpuMacroDetector {
 				break;
 			}
 			
-			monitor.increment();
+			monitor.incrementProgress();
 			monitor.setMessage(String.format("%s at 0x%08X", msg, function.getEntryPoint().getOffset()));
 
 			// sprintf() triggers a huge amount of false positives for setPolyG3().

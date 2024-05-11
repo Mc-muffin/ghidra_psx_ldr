@@ -149,6 +149,7 @@ public final class SigApplier {
 			
 			if (entryPointFound && entryPointObjects.contains(sig.getName())) {
 				sig.setApplied(true);
+				monitor.incrementProgress();
 				continue;
 			}
 			
@@ -167,7 +168,7 @@ public final class SigApplier {
 			monitor.setMessage(String.format("%s at 0x%08X", msg, startAddr.getOffset()));
 			
 			while (!monitor.isCancelled() && searchAddr.compareTo(endAddr) == -1) {
-				final Address addr = program.getMemory().findBytes(searchAddr, endAddr, bytes.getBytes(), bytes.getMasks(), true, monitor);
+				final Address addr = program.getMemory().findBytes(searchAddr, endAddr, bytes.getBytes(), bytes.getMasks(), true, TaskMonitor.DUMMY);
 				
 				if (addr == null) {
 					break;
@@ -219,8 +220,9 @@ public final class SigApplier {
 				entryPointFound |= entryPointObjects.contains(sig.getName());
 				
 				searchAddr = addr.add(4);
-				monitor.incrementProgress(1);
 			}
+
+			monitor.incrementProgress(1);
 		}
 		
 		if (objsList.size() > 0) {
