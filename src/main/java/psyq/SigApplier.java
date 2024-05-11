@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.io.File;
 
 import com.google.gson.JsonArray;
@@ -34,11 +35,16 @@ public final class SigApplier {
 	private final String gameId;
 	private final boolean onlyFirst;
 	private final float minEntropy;
+	private boolean entryPointFound;
+	private static final Set<String> entryPointObjects = Set.of(
+		"SNMAIN.OBJ", "NOHEAP.OBJ", "NONE.OBJ", "NONE2.OBJ", "NONE3.OBJ", "2MBYTE.OBJ", "8MBYTE.OBJ");
+
 	
 	public SigApplier(final String gameId, final String libJsonPath, final String patchesFile, boolean onlyFirst, float minEntropy, TaskMonitor monitor) throws IOException {
 		this.gameId = gameId.replace("_", "").replace(".", "");
 		this.onlyFirst = onlyFirst;
 		this.minEntropy = minEntropy;
+		entryPointFound = false;
 		
 		final File libJsonFile = new File(libJsonPath);
 		this.shortLibName = libJsonFile.getName().replace(".json", "");
@@ -115,6 +121,10 @@ public final class SigApplier {
 		return null;
 	}
 	
+	public void setEntryPointFound(final boolean found) {
+		entryPointFound = found;
+	}
+	
 	public List<PsyqSig> getSignatures() {
 		return signatures;
 	}
@@ -126,7 +136,8 @@ public final class SigApplier {
 		int totalObjs = signatures.size();
 		
 		monitor.initialize(totalObjs);
-		monitor.setMessage("Applying obj symbols...");
+		String libMsg = String.format("Searching for %s", shortLibName);
+		monitor.setMessage(libMsg);
 		monitor.clearCancelled();
 		
 		Map<String, Pair<Long, Float>> objsList = new HashMap<>();
@@ -134,6 +145,11 @@ public final class SigApplier {
 		for (final PsyqSig sig : signatures) {
 			if (monitor.isCancelled()) {
 				break;
+			}
+			
+			if (entryPointFound && entryPointObjects.contains(sig.getName())) {
+				sig.setApplied(true);
+				continue;
 			}
 			
 			final MaskedBytes bytes = sig.getSig();
@@ -144,13 +160,20 @@ public final class SigApplier {
 			
 			Address searchAddr = startAddr;
 			
+			String msg = sig.getName().equals(shortLibName)
+				? libMsg
+				: String.format("%s: %s", libMsg, sig.getName());
+
+			monitor.setMessage(String.format("%s at 0x%08X", msg, startAddr.getOffset()));
+			
 			while (!monitor.isCancelled() && searchAddr.compareTo(endAddr) == -1) {
 				final Address addr = program.getMemory().findBytes(searchAddr, endAddr, bytes.getBytes(), bytes.getMasks(), true, monitor);
 				
 				if (addr == null) {
-					monitor.incrementProgress(1);
 					break;
 				}
+
+				monitor.setMessage(String.format("%s at 0x%08X", msg, addr.getOffset()));
 
 				if (!sig.isApplied()) {
 					objsList.put(sig.getName(), new Pair<>(addr.getOffset(), sig.getEntropy()));
@@ -193,6 +216,7 @@ public final class SigApplier {
 				}
 
 				sig.setApplied(true);
+				entryPointFound |= entryPointObjects.contains(sig.getName());
 				
 				searchAddr = addr.add(4);
 				monitor.incrementProgress(1);

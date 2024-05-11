@@ -140,6 +140,8 @@ public class PsxAnalyzer extends AbstractAnalyzer {
 	}
 	
 	private void applyPsyqSignaturesByVersion(final File [] files, final String patchesFile, Program program, final Address startAddr, final Address endAddr, TaskMonitor monitor, MessageLog log) throws IOException {
+		boolean entryPointFound = program.getSymbolTable().getSymbols("__SN_ENTRY_POINT").hasNext();
+
 		for (final var file : files) {
 			if (monitor.isCancelled()) {
 				break;
@@ -152,6 +154,7 @@ public class PsxAnalyzer extends AbstractAnalyzer {
 				sig = appliers.get(fileName);
 			} else {
 				sig = new SigApplier(program.getName(), file.getAbsolutePath(), patchesFile, onlyFirst, minEntropy, monitor);
+				sig.setEntryPointFound(entryPointFound);
 				appliers.put(fileName, sig);
 			}
 			
