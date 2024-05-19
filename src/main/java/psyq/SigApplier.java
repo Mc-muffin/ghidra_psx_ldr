@@ -256,7 +256,11 @@ public final class SigApplier {
 				return;
 			}
 			
-			program.getSymbolTable().createLabel(address, name, SourceType.IMPORTED);
+			var ns = isFunction
+				? fpa.getCurrentProgram().getGlobalNamespace()
+				: fpa.getFunctionContaining(address);
+			
+			program.getSymbolTable().createLabel(address, name, ns, SourceType.IMPORTED);
 		} catch (InvalidInputException e) {
 			log.appendException(e);
 			e.printStackTrace();

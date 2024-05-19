@@ -772,8 +772,18 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 			block = mem.getBlock(start);
 		}
 		
-		if (end.compareTo(block.getEnd()) < 0)
-			mem.split(block, end); // Split at the end of the segment, unless it's the last segment in its parent block.
+		int endVsRomEnd = end.compareTo(block.getEnd());
+		if (endVsRomEnd < 0) {
+			 // Split at the end of the segment since its end lies before the end of its memory block.
+			mem.split(block, end);
+		}
+		else if (endVsRomEnd > 0) {
+			// Extend the segment into the next memory block if it spans it. This should only happen for .(s)bss.
+			var nextMem = mem.getBlock(end);
+			mem.split(nextMem, end);
+			mem.convertToInitialized(nextMem, (byte)0x0);
+			mem.join(block, nextMem);
+		}
 
 		block.setName(name);
 		block.setPermissions((rwx & READ) > 0, (rwx & WRITE) > 0, (rwx & EXECUTE) > 0);
