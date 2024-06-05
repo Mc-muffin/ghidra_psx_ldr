@@ -1,4 +1,4 @@
-name: Publish unstable builds
+name: Build
 
 on: workflow_dispatch
 
@@ -21,13 +21,6 @@ jobs:
         uses: er28-0652/setup-ghidra@b53614dada0a16e3c342277caae905b96d803109
         with:
           version: ${{ matrix.ghidra }}
-      - name: Download stdump
-        run: bash ./os/download.sh
-      - name: Test
-        uses: gradle/gradle-build-action@v2
-        with:
-          gradle-version: 7.6
-          arguments: test -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }}
       - name: Build Extension
         uses: gradle/gradle-build-action@v2
         with:
