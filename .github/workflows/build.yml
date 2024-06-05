@@ -1,0 +1,44 @@
+name: Publish unstable builds
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        ghidra:  ["11.0.3"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+      - name: Setup Java
+        uses: actions/setup-java@v1
+        with:
+          java-version: "17"
+          java-package: jdk
+          architecture: x64
+      - name: Setup Ghidra
+        uses: er28-0652/setup-ghidra@b53614dada0a16e3c342277caae905b96d803109
+        with:
+          version: ${{ matrix.ghidra }}
+      - name: Download stdump
+        run: bash ./os/download.sh
+      - name: Test
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 7.6
+          arguments: test -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }}
+      - name: Build Extension
+        uses: gradle/gradle-build-action@v2
+        with:
+          gradle-version: 7.6
+          arguments: buildExtension -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }}
+      - name: Get Path
+        run: echo "AR_EXTENSION_PATH=$(echo dist/*ghidra_psx_ldr.zip)" >> $GITHUB_ENV
+      - name: Get Name
+        run: echo "AR_EXTENSION_NAME=$(echo dist/*ghidra_psx_ldr.zip | cut -c 6-)" >> $GITHUB_ENV
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.AR_EXTENSION_NAME }}
+          path: ${{ env.AR_EXTENSION_PATH }}
