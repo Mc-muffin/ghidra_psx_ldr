@@ -28,7 +28,7 @@ jobs:
           auth_token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ matrix.ghidra }}
       - name: Build Extension
-        run: buildExtension -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }}
+        run: gradle -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }} buildExtension
       - name: Get Path
         run: echo "AR_EXTENSION_PATH=$(echo dist/*ghidra_psx_ldr.zip)" >> $GITHUB_ENV
       - name: Get Name
