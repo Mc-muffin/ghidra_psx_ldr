@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ghidra:  ["11.1.2"]
+        ghidra:  ["11.3.1"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -16,10 +16,8 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: "17"
-          java-package: jdk
-          architecture: x64
+          distribution: 'temurin'
+          java-version: "21"
       - name: Setup Ghidra
         uses: er28-0652/setup-ghidra@b53614dada0a16e3c342277caae905b96d803109
         with:
@@ -27,7 +25,7 @@ jobs:
       - name: Build Extension
         uses: gradle/gradle-build-action@v2
         with:
-          gradle-version: 7.6
+          gradle-version: 8.10
           arguments: buildExtension -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }}
       - name: Get Path
         run: echo "AR_EXTENSION_PATH=$(echo dist/*ghidra_psx_ldr.zip)" >> $GITHUB_ENV
