@@ -18,15 +18,17 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: "21"
-      - name: Setup Ghidra
-        uses: er28-0652/setup-ghidra@b53614dada0a16e3c342277caae905b96d803109
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
+          gradle-version: "8.10"
+      - name: Setup Ghidra
+        uses: antoniovazquezblanco/setup-ghidra@cacffdd46c5f53356e6a7822a2743a39f57d1958
+        with:
+          auth_token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ matrix.ghidra }}
       - name: Build Extension
-        uses: gradle/gradle-build-action@v2
-        with:
-          gradle-version: 8.10
-          arguments: buildExtension -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }}
+        run: buildExtension -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }}
       - name: Get Path
         run: echo "AR_EXTENSION_PATH=$(echo dist/*ghidra_psx_ldr.zip)" >> $GITHUB_ENV
       - name: Get Name
