@@ -14,4 +14,18 @@
     <external_name tool="IDA-PRO" name="mipsl"/>
     <external_name tool="DWARF.register.mapping.file" name="mips.dwarf"/>
   </language>
+  <language processor="PSX"
+            endian="little"
+            size="32"
+            variant="default"
+            version="1.5"
+            slafile="mips_psx.sla"
+            processorspec="mips_psx.pspec"
+            id="PSX:LE:32:default">
+    <description>PSX 32-bit addresses, little endian</description>
+    <compiler name="default" spec="mips_psx.cspec" id="default"/>
+    <external_name tool="gnu" name="mips:3000"/>
+    <external_name tool="IDA-PRO" name="mipsl"/>
+    <external_name tool="DWARF.register.mapping.file" name="mips.dwarf"/>
+  </language>
 </language_definitions>
