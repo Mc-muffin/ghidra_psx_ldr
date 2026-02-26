@@ -264,7 +264,7 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 		try {
 			segments = createSegments(settings.provider(), fpa, settings.log());
 		} catch (Exception e) {
-			settings.log().appendException(e1);
+			settings.log().appendException(e);
 			return;
 		}
 
@@ -304,7 +304,7 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 			}
 		}
 		
-		setGpBase(program, psxExe.getInitGp(), segments, log);
+		setGpBase(program, psxExe.getInitGp(), segments, settings.log());
 
 		addPsyqVerOption(program, ramBase, settings.log());
 		
@@ -337,7 +337,7 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 	    	opts.setLong(GP_REG_VAL_OPTION, newRamBase);
 
 			for (final AddressRange range : ranges) {
-				setRegisterValue(program, "gp", range.getMinAddress(), range.getMaxAddress(), newRamBase, settings.log());
+				setRegisterValue(program, "gp", range.getMinAddress(), range.getMaxAddress(), newRamBase, log);
 			}
 			
 		    commit = true;
