@@ -90,7 +90,6 @@ import ghidra.program.model.util.CodeUnitInsertionException;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.exception.InvalidInputException;
-import ghidra.util.exception.NotFoundException;
 import ghidra.util.task.TaskMonitor;
 import psyq.DetectPsyQ;
 
@@ -187,7 +186,7 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 	
 	@Override
 	public List<Option> getDefaultOptions(ByteProvider provider, LoadSpec loadSpec, DomainObject domainObject,
-			boolean loadIntoProgram) {
+			boolean loadIntoProgram, boolean mirrorFsLayout) {
 		
 		List<Option> list = new ArrayList<>();
 		
@@ -210,8 +209,7 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 	}
 
 	@Override
-	protected void load(ByteProvider provider, LoadSpec loadSpec, List<Option> options, Program program, TaskMonitor monitor, MessageLog log)
-			throws IOException {
+	protected void load(Program program, ImporterSettings settings) throws IOException {
 		
 		Options dOpts = program.getOptions(Program.DISASSEMBLER_PROPERTIES);
 		dOpts.setBoolean(Disassembler.RESTRICT_DISASSEMBLY_TO_EXECUTE_MEMORY_PROPERTY, true);
@@ -221,13 +219,13 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 		aOpts.setBoolean("MIPS Constant Reference Analyzer.Mark dual instruction references", true);
 
 		if (!psxExe.isParsed()) {
-			monitor.setMessage(String.format("%s : Cannot load", getName()));
+			settings.monitor().setMessage(String.format("%s : Cannot load", getName()));
 			return;
 		}
 		
-		monitor.setMessage("Loading PSX binary...");
+		settings.monitor().setMessage("Loading PSX binary...");
 		
-		FlatProgramAPI fpa = new FlatProgramAPI(program, monitor);
+		FlatProgramAPI fpa = new FlatProgramAPI(program, settings.monitor());
 		
 		long realRamBase = psxExe.getInitPc() & 0xFF000000L;
 		
@@ -257,22 +255,22 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 		try {
 			program.setImageBase(fpa.toAddr(ramBase), true);
 		} catch (AddressOverflowException | LockException | IllegalStateException e1) {
-			log.appendException(e1);
+			settings.log().appendException(e1);
 			return;
 		}
 		
 		List<AddressRange> segments;
 		
 		try {
-			segments = createSegments(provider, fpa, log);
+			segments = createSegments(settings.provider(), fpa, settings.log());
 		} catch (Exception e) {
-			log.appendException(e);
+			settings.log().appendException(e1);
 			return;
 		}
 
 		final Address initPc = fpa.toAddr(psxExe.getInitPc());
 		
-		setFunction(program, initPc, "start", true, true, log);
+		setFunction(program, initPc, "start", true, true, settings.log());
 
 		if (psxExe.getInitGp() == 0L) {
 			Address gpSet = program.getMemory().findBytes(initPc, GP_SET_SIGNATURE, GP_SET_SIGNATURE_MASK, true, TaskMonitor.DUMMY);
@@ -300,7 +298,7 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 					psxExe.setInitGp(gp);
 				} catch (MemoryAccessException e) {
 					e.printStackTrace();
-					log.appendException(e);
+					settings.log().appendException(e);
 					return;
 				}
 			}
@@ -308,17 +306,17 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 		
 		setGpBase(program, psxExe.getInitGp(), segments, log);
 
-		addPsyqVerOption(program, ramBase, log);
+		addPsyqVerOption(program, ramBase, settings.log());
 		
 		Address romStart = fpa.toAddr(psxExe.getRomStart());
 		Address romEnd = fpa.toAddr(psxExe.getRomEnd());
-		Reference mainRef = findAndAppyMain(provider, fpa, romStart, log);
+		Reference mainRef = findAndAppyMain(settings.provider(), fpa, romStart, settings.log());
 		
 		if (mainRef != null) {
-			createCompilerSegments(provider, fpa, romStart, romEnd, initPc, mainRef, log);
+			createCompilerSegments(settings.provider(), fpa, romStart, romEnd, initPc, mainRef, settings.log());
 		}
 		
-		monitor.setMessage("Loading PSX binary done.");
+		settings.monitor().setMessage("Loading PSX binary done.");
 	}
 	
 	public static long getGpBase(Program program) throws NumberFormatException {
@@ -339,7 +337,7 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 	    	opts.setLong(GP_REG_VAL_OPTION, newRamBase);
 
 			for (final AddressRange range : ranges) {
-				setRegisterValue(program, "gp", range.getMinAddress(), range.getMaxAddress(), newRamBase, log);
+				setRegisterValue(program, "gp", range.getMinAddress(), range.getMaxAddress(), newRamBase, settings.log());
 			}
 			
 		    commit = true;
@@ -580,7 +578,8 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 		createNamedStruct(fpa, hdrBlock.getStart(), psxExe.toDataType(), null, log);
 		
 		long ram_size_1 = psxExe.getRomStart() - ramBase;
-		createSegment(fpa, null, "KERNEL", ramBase, ram_size_1, false, true, log).setRead(false);		res.add(new AddressRangeImpl(fpa.toAddr(ramBase), ram_size_1));
+		createSegment(fpa, null, "KERNEL", ramBase, ram_size_1, false, true, log).setRead(false);
+		res.add(new AddressRangeImpl(fpa.toAddr(ramBase), ram_size_1));
 		// Unfortunately also creating a kernel segment at 0x0 confuses the address table analyzer pretty badly.
 
 		long code_size = psxExe.getRomSize();
@@ -751,13 +750,13 @@ public class PsxLoader extends AbstractLibrarySupportLoader {
 			next = splitSegment(mem, next, _sdata_addr, _sdata_end, ".sdata", READ | WRITE, true);
 			next = splitSegment(mem, next, _sbss_addr, _bss_addr, ".sbss", READ | WRITE, false);
 			next = splitSegment(mem, next, _bss_addr, _bss_end, ".bss", READ | WRITE, false);
-		} catch (IOException | MemoryBlockException | LockException | NotFoundException e) {
+		} catch (IOException | MemoryBlockException | LockException e) {
 			log.appendException(e);
 		}
 	}
 
 	private MemoryBlock splitSegment(Memory mem, MemoryBlock block, Address start, Address end, final String name, int rwx, boolean initialized)
-			throws MemoryBlockException, LockException, NotFoundException {
+			throws MemoryBlockException, LockException {
 		
 		if (end.compareTo(start) <= 0)
 			return block; // Can happen to .sdata.
