@@ -7,23 +7,23 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ghidra:  ["12.0.2", "12.0.3"]
+        ghidra:  ["12.0.2", "12.0.3", "12.0.4", "12.1", "12.1.2"]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: 'recursive'
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: "21"
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: "8.10"
+          gradle-version: "8.14.4"
       - name: Setup Ghidra
-        uses: antoniovazquezblanco/setup-ghidra@cacffdd46c5f53356e6a7822a2743a39f57d1958
+        uses: antoniovazquezblanco/setup-ghidra@v2
         with:
           auth_token: ${{ secrets.GITHUB_TOKEN }}
           version: ${{ matrix.ghidra }}
@@ -34,7 +34,7 @@ jobs:
       - name: Get Name
         run: echo "AR_EXTENSION_NAME=$(echo dist/*ghidra_psx_ldr.zip | cut -c 6-)" >> $GITHUB_ENV
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.AR_EXTENSION_NAME }}
           path: ${{ env.AR_EXTENSION_PATH }}
